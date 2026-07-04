@@ -35,7 +35,7 @@ function App() {
                     </main>
 
                     <footer className="text-center p-4 text-gray-500 text-sm border-t border-gray-200">
-                        © 2026 All rights reserved. Powered by Go and React.
+                        © 2026 All rights reserved. Powered with ❤️ in Tivan
                     </footer>
                 </div>
             </BrowserRouter>
