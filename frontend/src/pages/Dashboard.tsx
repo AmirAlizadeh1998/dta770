@@ -39,6 +39,7 @@ const menuItems = [
             { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
             { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
             { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
+            { label: "تحلیل با هوش مصنوعی", view: "analyze-ai", roles: [UserRole.ADMIN] },
         ],
     },
     {
@@ -172,7 +173,7 @@ export function Dashboard() {
         <div dir="rtl" className="flex min-h-screen bg-gray-50">
             <aside className="w-64 shrink-0 bg-white border-l border-gray-200 shadow-sm flex flex-col">
                 <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-800">پنل کاربری</h2>
+                    <h2 className="text-xl font-bold text-gray-800">داشبورد</h2>
                     <button
                         onClick={handleLogout}
                         title="خروج از حساب"

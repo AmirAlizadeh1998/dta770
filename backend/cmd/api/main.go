@@ -48,18 +48,20 @@ func main() {
 	// ----------------------------------------
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
+	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
 	mux.HandleFunc("/api/users", middleware.MainMiddleware(usersRouter))
 	mux.HandleFunc("/api/users/profile", middleware.MainMiddleware(handlers.UserProfileHandler))
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))
 	mux.HandleFunc("/api/devices/active", middleware.MainMiddleware(handlers.GetActiveDevicesHandler))
+	//mux.HandleFunc("/api/devices/analyze-ai", middleware.MainMiddleware(handlers.AnalyzeDeviceHandler))
 	mux.HandleFunc("/api/devices/analyze", middleware.MainMiddleware(handlers.AnalyzeDeviceHandler))
 	mux.HandleFunc("/api/devices/", middleware.MainMiddleware(handlers.DevicesHandler))
 	mux.HandleFunc("/api/devices", middleware.MainMiddleware(handlers.DevicesHandler))
-	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
-	mux.HandleFunc("/api/get-device-logs", middleware.MainMiddleware(handlers.GetDeviceLogs))
 	mux.HandleFunc("/api/monitor/devices/", middleware.MainMiddleware(handlers.DeviceMonitorDetailHandler))
 	mux.HandleFunc("/api/monitor/devices", middleware.MainMiddleware(handlers.GetDeviceLogDetailsHandler))
 	mux.HandleFunc("/api/monitor/chart", middleware.MainMiddleware(handlers.GetDeviceChartData))
+	mux.HandleFunc("/api/get-device-logs", middleware.MainMiddleware(handlers.GetDeviceLogs))
+	mux.HandleFunc("/api/export-device-logs", middleware.MainMiddleware(handlers.ExportDeviceLogsHandler))
 
 	//hash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
 	//fmt.Println("New Hash for 123456:", string(hash))

@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import SensorDataCards from "../components/FormattedLogs";
 import JalaliDatePicker from "../components/JalaliDatePicker.tsx";
 import { FormatToJalali } from "../utils/Formatters.ts";
+import * as XLSX from 'xlsx'
+import {FaFileExcel} from "react-icons/fa";
+import Select from "react-select";
+import type {Device} from "../models/device.ts";
+import {apiFetch} from "../api/ApiClient.ts";
 
 interface DeviceLog {
     id: number;
@@ -10,7 +15,9 @@ interface DeviceLog {
 }
 
 const LogsTable = () => {
+    const token = localStorage.getItem("token");
     const [logs, setLogs] = useState<DeviceLog[]>([]);
+    const [devices, setDevices] = useState<Device[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -26,6 +33,27 @@ const LogsTable = () => {
 
     const [sortBy, setSortBy] = useState<string>("created_at");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+    // کنترل باز و بسته بودن مودال
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+    // فیلترهای مخصوص اکسل
+    const options = devices.map((device) => ({
+        value: device.imei,
+        label: `${device.device_name} - ${device.imei}`,
+        originalData: device
+    }));
+
+    const limitOptions = [
+        { value: 100, label: '۱۰۰ رکورد آخر' },
+        { value: 500, label: '۵۰۰ رکورد آخر' },
+        { value: 1000, label: '۱۰۰۰ رکورد آخر' },
+        { value: 0, label: 'همه رکوردها (ممکنه طول بکشه)' }
+    ];
+
+    const [exportLimit, setExportLimit] = useState(100);
+    const [exportImei, setExportImei] = useState('')
+    const [exportStartDate, setExportStartDate] = useState('');
+    const [exportEndDate, setExportEndDate] = useState('');
 
     const fetchLogs = useCallback(async () => {
         try {
@@ -81,6 +109,21 @@ const LogsTable = () => {
         setPage(1);
     }, [searchQuery, startDate, endDate, sortBy, sortOrder]);
 
+    useEffect(() => {
+        const fetchDevices = async () => {
+            try {
+                const response = await apiFetch("/api/devices", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await response.json();
+                setDevices(data);
+            } catch (error) {
+                console.error("خطا در دریافت لیست دستگاه‌ها:", error);
+            }
+        };
+        fetchDevices();
+    }, [token]);
+
     const handleSort = (column: string) => {
         if (sortBy === column) {
             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -90,14 +133,90 @@ const LogsTable = () => {
         }
     };
 
+    const exportToExcel = async () => {
+        try {
+            // ۱. پارامترها رو آماده می‌کنیم
+            const params = new URLSearchParams();
+            if (exportImei) params.append("imei", exportImei);
+            if (exportLimit > 0) params.append("limit", exportLimit.toString()); // عدد ۰ یعنی لیمیت نداریم
+            if (exportStartDate) params.append("startDate", exportStartDate);
+            if (exportEndDate) params.append("endDate", exportEndDate);
+
+            // ۲. درخواست به بک‌اند برای دریافت دیتای کاملِ فیلتر شده
+            const response = await fetch(`/api/export-device-logs?${params.toString()}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (!response.ok) {
+                alert("مشکلی در دریافت اطلاعات از سرور پیش آمد!");
+                return;
+            }
+
+            const data = await response.json();
+            const exportData = data.logs || [];
+
+            if (exportData.length === 0) {
+                alert("با این فیلترها، دیتایی برای خروجی گرفتن پیدا نشد!");
+                return;
+            }
+
+            // ۳. فرمت کردن دیتا برای فایل اکسل (مشابه کدهای قبلی خودت)
+            const excelData = exportData
+                .filter((log: DeviceLog) => log.data && log.data.IMEI !== 'offline')
+                .map((log: DeviceLog) => ({
+                    "زمان": FormatToJalali(log.created_at),
+                    "IMEI": log.data.IMEI || '-',
+                    "داده‌های سنسور": JSON.stringify(log.data) // اینجا می‌تونی دیتای سنسورها رو جداگونه ستون‌بندی کنی
+                }));
+
+            // ۴. ساخت شیت اکسل
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            worksheet['!dir'] = 'rtl'; // راست‌چین کردن فایل اکسل
+
+            // ۵. ساخت فایل و دانلود
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Sensor Logs");
+
+            // یه اسم تر و تمیز برای فایل می‌سازیم
+            const fileName = `Export_${exportImei || 'All'}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+
+            // ۶. بستن مودال بعد از دانلود موفق
+            setIsExportModalOpen(false);
+
+        } catch (error) {
+            console.error("خطا در خروجی اکسل:", error);
+            alert("خطایی در ساخت فایل اکسل رخ داد.");
+        }
+    };
+
+    const handleDeviceChange = (selectedOption: any) => {
+        if (!selectedOption) {
+            setExportImei('');
+            return;
+        }
+        setExportImei(selectedOption.value);
+    };
+
     if (loading && logs.length === 0) return <div className="text-center p-5">در حال بارگذاری... ⏳</div>;
 
     return (
         <div className="p-4" dir="rtl">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800">جدول لاگ‌های سنسور 📊</h2>
+            {/* ✨ تغییر اول: عنوان و دکمه اکسل رو گذاشتیم تو یه ردیف */}
+            <button
+                onClick={() => setIsExportModalOpen(true)}
+                className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-4 py-2 rounded-md transition text-sm shadow-sm"
+            >
+                <FaFileExcel className="text-lg" />
+                تنظیمات خروجی اکسل
+            </button>
 
-            {/* بخش فیلترها (بدون تغییر) */}
+            {/* بخش فیلترها */}
             <div className="mb-6 flex flex-col md:flex-row items-end gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+
+                {/* ✨ تغییر دوم: دکمه اکسل قبلی رو از اینجا حذف کن که فقط اینپوت سرچ بمونه */}
                 <div className="flex-1 w-full">
                     <label className="block text-sm text-gray-600 mb-1">جستجوی IMEI</label>
                     <input
@@ -216,6 +335,85 @@ const LogsTable = () => {
                     </div>
                 </div>
             )}
+
+            {/* مودال تنظیمات خروجی اکسل */}
+            {isExportModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
+
+                        {/* دکمه بستن */}
+                        <button
+                            onClick={() => setIsExportModalOpen(false)}
+                            className="absolute top-4 left-4 text-gray-400 hover:text-gray-600"
+                        >
+                            ✕
+                        </button>
+
+                        <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">تنظیمات خروجی اکسل 📊</h3>
+
+                        <div className="space-y-4">
+                            {/* فیلتر تعداد */}
+                            <div>
+                                <Select
+                                    options={options}
+                                    value={options.find(option => option.value === exportImei) || null}
+                                    onChange={handleDeviceChange}
+                                    isRtl={true}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                    placeholder="انتخاب دستگاه..."
+                                    noOptionsMessage={() => "دستگاهی پیدا نشد"}
+                                    styles={{
+                                        control: (base) => ({
+                                            ...base, padding: '4px', borderRadius: '8px', borderColor: '#ddd', fontSize: '16px'
+                                        })
+                                    }}
+                                />
+                                <Select
+                                    options={limitOptions}
+                                    value={limitOptions.find(option => option.value === exportLimit) || limitOptions[0]}
+                                    onChange={(selectedOption) => setExportLimit(selectedOption ? selectedOption.value : 100)}
+                                    isRtl={true}
+                                    isSearchable={false} // نیازی به سرچ نداره چون گزینه‌ها کمه
+                                    placeholder="انتخاب تعداد..."
+                                    styles={{
+                                        control: (base) => ({
+                                            ...base, padding: '4px', borderRadius: '8px', borderColor: '#ddd', fontSize: '16px'
+                                        })
+                                    }}
+                                />
+                            </div>
+
+                            {/* فیلتر از تاریخ */}
+                            <div className="flex-1 w-full">
+                                <JalaliDatePicker label="از تاریخ" value={exportStartDate} onChange={(val) => setExportStartDate(val)} />
+                            </div>
+
+                            {/* فیلتر تا تاریخ */}
+                            <div className="flex-1 w-full">
+                                <JalaliDatePicker label="تا تاریخ" value={exportEndDate} onChange={(val) => setExportEndDate(val)} />
+                            </div>
+                        </div>
+
+                        {/* دکمه‌های اکشن */}
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => { exportToExcel() }}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-md transition font-medium"
+                            >
+                                دانلود فایل اکسل
+                            </button>
+                            <button
+                                onClick={() => setIsExportModalOpen(false)}
+                                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-md transition font-medium"
+                            >
+                                انصراف
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
