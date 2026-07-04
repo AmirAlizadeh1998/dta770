@@ -1,0 +1,60 @@
+name: Deploy to Ubuntu Server
+
+on:
+  push:
+    branches:
+      - main # هر وقت کدی روی این برنچ پوش بشه، این اکشن اجرا میشه
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: ⚙️ Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # نسخه نود جی اس
+
+    - name: 🏗️ Build Frontend
+      run: |
+        cd frontend
+        npm install
+        npm run build
+        # انتقال فایل‌های بیلد شده به پوشه بک‌اند
+        mkdir -p ../backend/cmd/api/dist
+        cp -r dist/* ../backend/cmd/api/dist/
+
+    - name: ⚙️ Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.5' # نسخه گو رو در صورت نیاز تغییر بده
+
+    - name: 🏗️ Build Backend (Linux binary)
+      run: |
+        cd backend/cmd/api
+        GOOS=linux GOARCH=amd64 go build -o dta770 .
+
+    - name: 🚀 Copy binary to server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        port: ${{ secrets.SERVER_PORT }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "backend/cmd/api/dta770"
+        target: "/home/${{ secrets.SERVER_USER }}" # این مسیر رو اگه فرق داره روی سرورت عوض کن
+        strip_components: 3 # برای اینکه فقط خود فایل کپی بشه نه کل پوشه‌ها
+
+    - name: 🔄 Restart Systemd Service
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        port: ${{ secrets.SERVER_PORT }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          sudo systemctl restart dta770
+          sudo systemctl status dta770
