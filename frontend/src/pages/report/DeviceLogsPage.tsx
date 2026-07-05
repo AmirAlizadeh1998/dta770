@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import SensorDataCards from "../components/FormattedLogs";
-import JalaliDatePicker from "../components/JalaliDatePicker.tsx";
-import { FormatToJalali } from "../utils/Formatters.ts";
+import SensorDataCards from "../../components/FormattedLogs";
+import JalaliDatePicker from "../../components/JalaliDatePicker.tsx";
+import { FormatToJalali } from "../../utils/Formatters.ts";
 import * as XLSX from 'xlsx'
 import {FaFileExcel} from "react-icons/fa";
 import Select from "react-select";
-import type {Device} from "../models/device.ts";
-import {apiFetch} from "../api/ApiClient.ts";
+import type {Device} from "../../models/device.ts";
+import {apiFetch} from "../../api/ApiClient.ts";
 
 interface DeviceLog {
     id: number;

@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react"
-// نوع Role رو هم ایمپورت کن (مسیرش بستگی به فایلت داره)
-import type { User, UserFormData, Role } from "../models/user.ts"
+import type { User, UserFormData, Role } from "../../models/user.ts"
 import UserListPage from "./UserListPage.tsx"
-import { createUser, deleteUser, fetchUsers, updateUser } from "../api/users.ts";
-import { fetchRoles } from "../api/roles.ts";
-import UserFormModal from "../components/UserFormModal.tsx";
+import { createUser, deleteUser, fetchUsers, updateUser } from "../../api/users.ts";
+import { fetchRoles } from "../../api/roles.ts";
+import UserFormModal from "../../components/UserFormModal.tsx";
 
 export default function UsersListView() {
 

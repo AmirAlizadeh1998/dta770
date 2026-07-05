@@ -1,16 +1,16 @@
 import { useNavigate } from "react-router-dom"
-import DeviceManagePage from "./DeviceManagePage.tsx";
-import LogsTable from "./DeviceLogsPage.tsx";
-import UsersListView from "./UserListView.tsx";
-import UsersRolesView from "./UserRolesView.tsx";
-import DeviceMonitorPage from "./DeviceMonitorPage.tsx";
 import { useEffect, useState, useMemo } from "react";
-import ActiveDevicesView from "./ActiveDevicesView.tsx";
-import DataAnalyzePage from "./DataAnalyzePage.tsx";
 import {jwtDecode} from "jwt-decode";
 import {UserRole} from "../models/consts.ts";
 import {MdAssessment, MdDevices, MdLogout, MdPeople, MdPerson} from "react-icons/md";
-import {UserProfilePage} from "./UserProfilePage.tsx";
+import ActiveDevicesView from "./devices/ActiveDevicesView.tsx";
+import DeviceManagePage from "./devices/DeviceManagePage.tsx";
+import UsersListView from "./user/UserListView.tsx";
+import UsersRolesView from "./user/UserRolesView.tsx";
+import LogsTable from "./report/DeviceLogsPage.tsx";
+import DeviceMonitorPage from "./report/DeviceMonitorPage.tsx";
+import DataAnalyzePage from "./report/DataAnalyzePage.tsx";
+import {UserProfilePage} from "./profile/UserProfilePage.tsx";
 
 const menuItems = [
     {

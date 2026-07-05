@@ -1,17 +1,17 @@
 import {useEffect, useState} from 'react';
 import Select from 'react-select';
-import {apiFetch} from "../api/ApiClient.ts";
-import type {Device, DeviceDetailsResponse} from "../models/device.ts";
+import {apiFetch} from "../../api/ApiClient.ts";
+import type {Device, DeviceDetailsResponse} from "../../models/device.ts";
 import {
     BasicInfoTab,
     CurrentTab, FrqTab,
     PowerTab,
     TimeInfoTable,
     VoltageTab
-} from "../components/deviceMonitorPage/MonitorComponents";
-import {TABS} from "../models/consts";
-import ChartDashboard from "../components/deviceMonitorPage/ChartView.tsx";
-import {VoltageAlarmTable} from "../components/deviceMonitorPage/AlarmTableComponent.tsx";
+} from "../../components/deviceMonitorPage/MonitorComponents";
+import {TABS} from "../../models/consts";
+import ChartDashboard from "../../components/deviceMonitorPage/ChartView.tsx";
+import {VoltageAlarmTable} from "../../components/deviceMonitorPage/AlarmTableComponent.tsx";
 
 interface DeviceMonitorProps {
     initialImei?: string | null;

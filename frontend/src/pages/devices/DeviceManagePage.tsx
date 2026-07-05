@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react"
-import JalaliDatePicker from "../components/JalaliDatePicker.tsx"
+import JalaliDatePicker from "../../components/JalaliDatePicker.tsx"
 
-import {FormatToJalali} from "../utils/Formatters.ts";
-import { UserRole } from "../models/consts.ts";
+import {FormatToJalali} from "../../utils/Formatters.ts";
+import { UserRole } from "../../models/consts.ts";
 import {jwtDecode} from "jwt-decode";
 
 type Device = {

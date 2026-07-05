@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { User } from "../models/user";
-import { apiFetch } from "../api/ApiClient.ts";
+import type { User } from "../../models/user";
+import { apiFetch } from "../../api/ApiClient.ts";
 
 // یه تایپ جدید برای فرم ویرایش می‌سازیم که پسورد هم بتونه توش باشه
 interface EditForm extends Partial<User> {

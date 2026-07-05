@@ -1,8 +1,8 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import Select from 'react-select'; // 👈 اضافه شد
-import {apiFetch} from "../api/ApiClient.ts";
-import type {Device} from "../models/device.ts";
-import JalaliDatePicker from "../components/JalaliDatePicker.tsx";
+import Select from 'react-select';
+import {apiFetch} from "../../api/ApiClient.ts";
+import type {Device} from "../../models/device.ts";
+import JalaliDatePicker from "../../components/JalaliDatePicker.tsx";
 
 const DEVICE_PARAMETERS = [
     "ir_ave", "ir_cur", "ir_max", "ir_min", "is_ave", "is_cur", "is_max", "is_min",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DeviceCard } from "./ActiveDevicesPage.tsx";
-import {apiFetch} from "../api/ApiClient.ts";
+import {apiFetch} from "../../api/ApiClient.ts";
 
 interface Device {
     id: number;

@@ -1,8 +1,8 @@
 // pages/UserListPage.tsx
 
 import { useMemo, useState } from "react";
-import type { User } from "../models/user.ts";
-import type { Role } from "../models/user.ts"; // حتماً فایل مدل Role رو اضافه یا مسیرش رو درست کن
+import type { User } from "../../models/user.ts";
+import type { Role } from "../../models/user.ts";
 
 interface UserListPageProps {
     users?: User[];

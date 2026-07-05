@@ -38,13 +38,35 @@ func main() {
 	// ۲. تنظیم روت‌ها
 	mux := http.NewServeMux()
 
-	// --- بخش فرانت‌اند (اضافه شده به mux) ---
+	// --- بخش فرانت‌اند (اصلاح شده برای مشکل ۴۰۴ تو SPAها) ---
 	distFs, err := fs.Sub(frontend, "dist")
 	if err != nil {
 		log.Fatal("خطا در پیدا کردن پوشه فرانت‌اند: ", err)
 	}
-	// دقت کن که اینجا از mux.Handle استفاده کردیم نه http.Handle
-	mux.Handle("/", http.FileServer(http.FS(distFs)))
+
+	// فایل‌سرور استاندارد رو می‌ریزیم تو یه متغیر
+	fileServer := http.FileServer(http.FS(distFs))
+
+	// به جای mux.Handle، یه هندلر سفارشی با mux.HandleFunc می‌نویسیم
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// مسیر درخواستی رو درمیاریم
+		reqPath := r.URL.Path
+		if reqPath == "/" {
+			reqPath = "index.html"
+		} else {
+			reqPath = reqPath[1:] // اسلشِ اولِ مسیر رو حذف می‌کنیم تا بگرده تو پوشه
+		}
+
+		// با fs.Stat چک می‌کنیم ببینیم اصلا همچین فایلی تو dist داریم؟
+		if _, err := fs.Stat(distFs, reqPath); err != nil {
+			// اگه فایل رو پیدا نکرد (ارور داد)، یعنی یه مسیریه که مال خود Reactـه
+			// پس آدرس رو گول می‌زنیم و برمی‌گردونیم به روت تا index.html رو لود کنه!
+			r.URL.Path = "/"
+		}
+
+		// حالا درخواست رو می‌دیم دست فایل‌سرور تا زحمت سِرو کردنش رو بکشه
+		fileServer.ServeHTTP(w, r)
+	})
 	// ----------------------------------------
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
