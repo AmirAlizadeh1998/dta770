@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginUser } from "../api/auth.ts";
+import {MdLogin} from "react-icons/md";
 
 export function LoginPage() {
     const [userName, setUserName] = useState("");
@@ -16,8 +17,8 @@ export function LoginPage() {
     }, [navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault(); // این رفیقمون دقیقاً جلوی رفرش شدن صفحه رو می‌گیره
-        setError(""); // پاک کردن خطای قبلی
+        e.preventDefault();
+        setError("");
 
         try {
             const response = await loginUser({
@@ -50,29 +51,23 @@ export function LoginPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            نام کاربری:
-                        </label>
                         <input
                             type="text"
                             required
-                            value={userName} /* 👈 این رو اضافه کردم */
+                            value={userName}
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                            placeholder="مثلاً: amir"
+                            placeholder="نام کاربری"
                             onChange={(e) => setUserName(e.target.value)}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            رمز عبور:
-                        </label>
                         <input
                             type="password"
                             required
-                            value={password} /* 👈 این رو هم اضافه کردم */
+                            value={password}
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                            placeholder="••••••••"
+                            placeholder="رمز عبور"
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     </div>
@@ -86,9 +81,10 @@ export function LoginPage() {
 
                     <button
                         type="submit"
-                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition transform active:scale-95"
+                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition transform active:scale-95 flex items-center justify-center gap-2"
                     >
-                        بزن بریم تو! 🚀
+                        <span>بزن بریم</span>
+                        <MdLogin className="text-xl" />
                     </button>
                 </form>
             </div>
