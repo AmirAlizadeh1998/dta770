@@ -16,8 +16,8 @@ export function LoginPage() {
     }, [navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault(); // این رفیقمون دقیقاً جلوی رفرش شدن صفحه رو می‌گیره
-        setError(""); // پاک کردن خطای قبلی
+        e.preventDefault();
+        setError("");
 
         try {
             const response = await loginUser({
@@ -50,29 +50,29 @@ export function LoginPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            نام کاربری:
-                        </label>
+                        {/*<label className="block text-sm font-medium text-gray-700 mb-2">*/}
+                        {/*    نام کاربری:*/}
+                        {/*</label>*/}
                         <input
                             type="text"
                             required
                             value={userName} /* 👈 این رو اضافه کردم */
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                            placeholder="مثلاً: amir"
+                            placeholder="نام کاربری"
                             onChange={(e) => setUserName(e.target.value)}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            رمز عبور:
-                        </label>
+                        {/*<label className="block text-sm font-medium text-gray-700 mb-2">*/}
+                        {/*    رمز عبور:*/}
+                        {/*</label>*/}
                         <input
                             type="password"
                             required
                             value={password} /* 👈 این رو هم اضافه کردم */
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                            placeholder="••••••••"
+                            placeholder="رمز عبور"
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     </div>
