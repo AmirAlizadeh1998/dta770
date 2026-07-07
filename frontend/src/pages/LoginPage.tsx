@@ -72,7 +72,6 @@ export function LoginPage() {
                         />
                     </div>
 
-                    {/* اگه اروری باشه اینجا بدون رفرش شدن نشون داده میشه */}
                     {error && (
                         <div className="bg-red-50 p-3 rounded-lg border border-red-200 text-red-600 text-sm text-center animate-pulse">
                             {error}
