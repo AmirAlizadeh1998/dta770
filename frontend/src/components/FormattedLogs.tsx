@@ -21,7 +21,7 @@ const SensorDataCards: React.FC<SensorDataProps> = ({ data }) => {
     };
 
     Object.entries(data).forEach(([key, value]) => {
-        if (key.includes('imei') || key.includes('acin') || key.includes('model') || key.includes('clock') || key.includes('sig')) {
+        if (key.includes('IMEI') || key.includes('model') || key.includes('acin') || key.includes('clock') || key.includes('sig')) {
             groups["اطلاعات دستگاه"][key] = value;
         } else if (key.startsWith('v_')) {
             groups["ولتاژ (V)"][key] = value;

@@ -234,7 +234,14 @@ export default function DeviceManagePage() {
             const data = await response.json()
 
             if (!response.ok) {
+                // اگه سرور ارور داد (مثل خطای تکراری بودن IMEI)، همون پیام رو نشون میدیم
                 console.error(data.message || "خطا در ذخیره اطلاعات")
+                alert(data.message || "خطایی رخ داده است ❌")
+
+                // اگه دوست داشتی زیر فیلد اینپوت هم قرمز بشه، این خط رو هم از کامنت دربیار:
+                setErrors((prev) => ({ ...prev, imei: data.message || "IMEI تکراری است" }))
+
+                return // 👈 این return خیلی مهمه! باعث میشه کد ادامه پیدا نکنه و پیام موفقیت نده
             }
 
             alert(data.message || "با موفقیت ثبت شد!")

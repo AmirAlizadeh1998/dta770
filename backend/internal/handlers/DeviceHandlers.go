@@ -474,8 +474,23 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	).Scan(&newID)
 
 	if err != nil {
+		// اضافه کردن هدر JSON برای ارورها
+		w.Header().Set("Content-Type", "application/json")
+
+		// چک کردن خطای تکراری بودن IMEI
+		if strings.Contains(err.Error(), "unique_imei") || strings.Contains(err.Error(), "23505") {
+			w.WriteHeader(http.StatusConflict) // کد 409
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "این IMEI قبلاً در سیستم ثبت شده است! لطفا بررسی کنید. 🚫",
+			})
+			return
+		}
+
 		log.Printf("Error inserting device: %v", err)
-		http.Error(w, "خطا در ذخیره دستگاه", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "خطا در ذخیره دستگاه",
+		})
 		return
 	}
 
@@ -553,8 +568,22 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 	)
 
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+
+		// بررسی خطای تکراری در آپدیت
+		if strings.Contains(err.Error(), "unique_imei") || strings.Contains(err.Error(), "23505") {
+			w.WriteHeader(http.StatusConflict) // کد 409
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "این IMEI قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
+			})
+			return
+		}
+
 		log.Printf("Error updating device: %v", err)
-		http.Error(w, "خطا در بروزرسانی دستگاه", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "خطا در بروزرسانی دستگاه",
+		})
 		return
 	}
 
