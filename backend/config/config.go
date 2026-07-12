@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/viper"
@@ -22,11 +23,16 @@ func Load() (*Config, error) {
 
 	// لود کردن متغیرهای محیطی سیستم‌عامل
 	viper.AutomaticEnv()
+	err := viper.BindEnv("GAP_API_KEY")
+	if err != nil {
+		return nil, err
+	}
 
 	// تلاش برای خواندن فایل پیکربندی
 	if err := viper.ReadInConfig(); err != nil {
 		// اگر فایل پیدا نشد ولی متغیر توی سیستم‌عامل ست شده بود، ارور نده
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if !errors.As(err, &configFileNotFoundError) {
 			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
