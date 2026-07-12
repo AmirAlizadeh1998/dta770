@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dta770/config"
 	"dta770/internal/database"
 	"dta770/internal/handlers"
 	"dta770/internal/middleware"
@@ -9,6 +10,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+
+	"github.com/sashabaranov/go-openai"
 )
 
 func usersRouter(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +35,16 @@ func usersRouter(w http.ResponseWriter, r *http.Request) {
 var frontend embed.FS
 
 func main() {
+	// ۱. لود کردن کانفیگ برای یک‌بار در کل چرخه حیات برنامه
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// ۲. ساخت کانفیگ کلاینت OpenAI (GapGPT)
+	gapGptConfig := openai.DefaultConfig(cfg.GapAPIKey)
+	gapGptConfig.BaseURL = "https://api.gapgpt.app/v1"
+	aiClient := openai.NewClientWithConfig(gapGptConfig)
 	// ۱. اجرای دیتابیس
 	database.InitDB()
 
@@ -71,11 +84,11 @@ func main() {
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
 	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
+	mux.HandleFunc("/api/chat", middleware.MainMiddleware(handlers.AiChatHandler(aiClient)))
 	mux.HandleFunc("/api/users", middleware.MainMiddleware(usersRouter))
 	mux.HandleFunc("/api/users/profile", middleware.MainMiddleware(handlers.UserProfileHandler))
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))
 	mux.HandleFunc("/api/devices/active", middleware.MainMiddleware(handlers.GetActiveDevicesHandler))
-	//mux.HandleFunc("/api/devices/analyze-ai", middleware.MainMiddleware(handlers.AnalyzeDeviceHandler))
 	mux.HandleFunc("/api/devices/analyze", middleware.MainMiddleware(handlers.AnalyzeDeviceHandler))
 	mux.HandleFunc("/api/devices/", middleware.MainMiddleware(handlers.DevicesHandler))
 	mux.HandleFunc("/api/devices", middleware.MainMiddleware(handlers.DevicesHandler))

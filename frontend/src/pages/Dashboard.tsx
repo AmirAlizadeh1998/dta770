@@ -11,6 +11,7 @@ import LogsTable from "./report/DeviceLogsPage.tsx";
 import DeviceMonitorPage from "./report/DeviceMonitorPage.tsx";
 import DataAnalyzePage from "./report/DataAnalyzePage.tsx";
 import {UserProfilePage} from "./profile/UserProfilePage.tsx";
+import AiChatPage from "./report/AiChatPage.tsx";
 
 const menuItems = [
     {
@@ -159,6 +160,7 @@ export function Dashboard() {
             case "logs": return <LogsTable />
             case "monitor": return <DeviceMonitorPage initialImei={activeDeviceImei} />
             case "analyze": return <DataAnalyzePage/>
+            case "analyze-ai": return <AiChatPage/>
             case "profile": return <UserProfilePage/>
             default:
                 return (
