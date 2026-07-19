@@ -33,9 +33,6 @@ func ExportDeviceLogsHandler(w http.ResponseWriter, r *http.Request) {
 		// اگه imei یه ستون جداست این خط رو استفاده کن:
 		query += fmt.Sprintf(` AND imei = $%d`, argCounter)
 
-		// 💡 اما اگه imei تو فیلد JSON ذخیره شده، خط بالا رو کامنت کن و اینو بنویس:
-		// query += fmt.Sprintf(` AND data->>'IMEI' = $%d`, argCounter)
-
 		args = append(args, imei)
 		argCounter++
 	}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import SensorDataCards from "../../components/FormattedLogs";
 import JalaliDatePicker from "../../components/JalaliDatePicker.tsx";
-import { FormatToJalali } from "../../utils/Formatters.ts";
+import {FormatSignalQuality, FormatToJalali} from "../../utils/Formatters.ts";
 import * as XLSX from 'xlsx'
 import {FaFileExcel} from "react-icons/fa";
 import Select from "react-select";
@@ -133,14 +133,19 @@ const LogsTable = () => {
         }
     };
 
+    const toEnglishDigits = (value: string): string =>
+        value
+            .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+            .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+
     const exportToExcel = async () => {
         try {
             // ۱. پارامترها رو آماده می‌کنیم
             const params = new URLSearchParams();
             if (exportImei) params.append("imei", exportImei);
             if (exportLimit > 0) params.append("limit", exportLimit.toString()); // عدد ۰ یعنی لیمیت نداریم
-            if (exportStartDate) params.append("startDate", exportStartDate);
-            if (exportEndDate) params.append("endDate", exportEndDate);
+            if (exportStartDate) params.append("startDate", toEnglishDigits(exportStartDate));
+            if (exportEndDate) params.append("endDate", toEnglishDigits(exportEndDate));
 
             // ۲. درخواست به بک‌اند برای دریافت دیتای کاملِ فیلتر شده
             const response = await fetch(`/api/export-device-logs?${params.toString()}`, {
@@ -162,13 +167,204 @@ const LogsTable = () => {
                 return;
             }
 
-            // ۳. فرمت کردن دیتا برای فایل اکسل (مشابه کدهای قبلی خودت)
+            const cleanValue = (val: string | undefined | null) => {
+                // اگه مقدار خالی بود یا nan و -nan بود، یه خط تیره برمی‌گردونه
+                if (!val || val.toLowerCase() === 'nan' || val.toLowerCase() === '-nan') {
+                    return '-'; // یا می‌تونی بجاش '0' بذاری
+                }
+                return val;
+            };
+
+            // ۳. فرمت کردن دیتا برای فایل اکسل
             const excelData = exportData
                 .filter((log: DeviceLog) => log.data && log.data.IMEI !== 'offline')
                 .map((log: DeviceLog) => ({
-                    "زمان": FormatToJalali(log.created_at),
-                    "IMEI": log.data.IMEI || '-',
-                    "داده‌های سنسور": JSON.stringify(log.data) // اینجا می‌تونی دیتای سنسورها رو جداگونه ستون‌بندی کنی
+                    "timestamp": toEnglishDigits(FormatToJalali(log.created_at)),
+                    "IMEI": cleanValue(log.data.IMEI),
+                    "acin": cleanValue(log.data.acin),
+                    "model": cleanValue(log.data.model),
+
+                    // General Info
+                    "work_clock": cleanValue(log.data.work_clock),
+                    "customer_id": cleanValue(log.data.customer_id),
+                    "sig_quality": cleanValue(FormatSignalQuality(log.data.sig_quality)),
+
+                    // IR
+                    "ir_ave": cleanValue(log.data.ir_ave),
+                    "ir_cur": cleanValue(log.data.ir_cur),
+                    "ir_max": cleanValue(log.data.ir_max),
+                    "ir_min": cleanValue(log.data.ir_min),
+                    // IS
+                    "is_ave": cleanValue(log.data.is_ave),
+                    "is_cur": cleanValue(log.data.is_cur),
+                    "is_max": cleanValue(log.data.is_max),
+                    "is_min": cleanValue(log.data.is_min),
+                    // IT
+                    "it_ave": cleanValue(log.data.it_ave),
+                    "it_cur": cleanValue(log.data.it_cur),
+                    "it_max": cleanValue(log.data.it_max),
+                    "it_min": cleanValue(log.data.it_min),
+
+                    // THD
+                    "thd_ir": cleanValue(log.data.thd_ir),
+                    "thd_is": cleanValue(log.data.thd_is),
+                    "thd_it": cleanValue(log.data.thd_it),
+                    "thd_vrn": cleanValue(log.data.thd_vrn),
+                    "thd_vrs": cleanValue(log.data.thd_vrs),
+                    "thd_vrt": cleanValue(log.data.thd_vrt),
+                    "thd_vsn": cleanValue(log.data.thd_vsn),
+                    "thd_vst": cleanValue(log.data.thd_vst),
+                    "thd_vtn": cleanValue(log.data.thd_vtn),
+
+                    // Frequency
+                    "frq_ave": cleanValue(log.data.frq_ave),
+                    "frq_cur": cleanValue(log.data.frq_cur),
+                    "frq_max": cleanValue(log.data.frq_max),
+                    "frq_min": cleanValue(log.data.frq_min),
+
+                    // Voltage RN
+                    "v_rn_ave": cleanValue(log.data.v_rn_ave),
+                    "v_rn_cur": cleanValue(log.data.v_rn_cur),
+                    "v_rn_max": cleanValue(log.data.v_rn_max),
+                    "v_rn_min": cleanValue(log.data.v_rn_min),
+                    // Voltage RS
+                    "v_rs_ave": cleanValue(log.data.v_rs_ave),
+                    "v_rs_cur": cleanValue(log.data.v_rs_cur),
+                    "v_rs_max": cleanValue(log.data.v_rs_max),
+                    "v_rs_min": cleanValue(log.data.v_rs_min),
+                    // Voltage RT
+                    "v_rt_ave": cleanValue(log.data.v_rt_ave),
+                    "v_rt_cur": cleanValue(log.data.v_rt_cur),
+                    "v_rt_max": cleanValue(log.data.v_rt_max),
+                    "v_rt_min": cleanValue(log.data.v_rt_min),
+                    // Voltage SN
+                    "v_sn_ave": cleanValue(log.data.v_sn_ave),
+                    "v_sn_cur": cleanValue(log.data.v_sn_cur),
+                    "v_sn_max": cleanValue(log.data.v_sn_max),
+                    "v_sn_min": cleanValue(log.data.v_sn_min),
+                    // Voltage TN
+                    "v_tn_ave": cleanValue(log.data.v_tn_ave),
+                    "v_tn_cur": cleanValue(log.data.v_tn_cur),
+                    "v_tn_max": cleanValue(log.data.v_tn_max),
+                    "v_tn_min": cleanValue(log.data.v_tn_min),
+                    // Voltage TS
+                    "v_ts_ave": cleanValue(log.data.v_ts_ave),
+                    "v_ts_cur": cleanValue(log.data.v_ts_cur),
+                    "v_ts_max": cleanValue(log.data.v_ts_max),
+                    "v_ts_min": cleanValue(log.data.v_ts_min),
+
+                    // Cos Phi
+                    "cos_r_ave": cleanValue(log.data.cos_r_ave),
+                    "cos_r_cur": cleanValue(log.data.cos_r_cur),
+                    "cos_r_max": cleanValue(log.data.cos_r_max),
+                    "cos_r_min": cleanValue(log.data.cos_r_min),
+                    "cos_s_ave": cleanValue(log.data.cos_s_ave),
+                    "cos_s_cur": cleanValue(log.data.cos_s_cur),
+                    "cos_s_max": cleanValue(log.data.cos_s_max),
+                    "cos_s_min": cleanValue(log.data.cos_s_min),
+                    "cos_t_ave": cleanValue(log.data.cos_t_ave),
+                    "cos_t_cur": cleanValue(log.data.cos_t_cur),
+                    "cos_t_max": cleanValue(log.data.cos_t_max),
+                    "cos_t_min": cleanValue(log.data.cos_t_min),
+                    "cos_total_ave": cleanValue(log.data.cos_total_ave),
+                    "cos_total_cur": cleanValue(log.data.cos_total_cur),
+                    "cos_total_max": cleanValue(log.data.cos_total_max),
+                    "cos_total_min": cleanValue(log.data.cos_total_min),
+
+                    // Active Power
+                    "p_act_r_ave": cleanValue(log.data.p_act_r_ave),
+                    "p_act_r_cur": cleanValue(log.data.p_act_r_cur),
+                    "p_act_r_max": cleanValue(log.data.p_act_r_max),
+                    "p_act_r_min": cleanValue(log.data.p_act_r_min),
+                    "p_act_s_ave": cleanValue(log.data.p_act_s_ave),
+                    "p_act_s_cur": cleanValue(log.data.p_act_s_cur),
+                    "p_act_s_max": cleanValue(log.data.p_act_s_max),
+                    "p_act_s_min": cleanValue(log.data.p_act_s_min),
+                    "p_act_t_ave": cleanValue(log.data.p_act_t_ave),
+                    "p_act_t_cur": cleanValue(log.data.p_act_t_cur),
+                    "p_act_t_max": cleanValue(log.data.p_act_t_max),
+                    "p_act_t_min": cleanValue(log.data.p_act_t_min),
+                    "p_act_into_grid": cleanValue(log.data.p_act_into_grid),
+                    "p_act_into_load": cleanValue(log.data.p_act_into_load),
+
+                    // Reactive Power
+                    "p_ract_r_ave": cleanValue(log.data.p_ract_r_ave),
+                    "p_ract_r_cur": cleanValue(log.data.p_ract_r_cur),
+                    "p_ract_r_max": cleanValue(log.data.p_ract_r_max),
+                    "p_ract_r_min": cleanValue(log.data.p_ract_r_min),
+                    "p_ract_s_ave": cleanValue(log.data.p_ract_s_ave),
+                    "p_ract_s_cur": cleanValue(log.data.p_ract_s_cur),
+                    "p_ract_s_max": cleanValue(log.data.p_ract_s_max),
+                    "p_ract_s_min": cleanValue(log.data.p_ract_s_min),
+                    "p_ract_t_ave": cleanValue(log.data.p_ract_t_ave),
+                    "p_ract_t_cur": cleanValue(log.data.p_ract_t_cur),
+                    "p_ract_t_max": cleanValue(log.data.p_ract_t_max),
+                    "p_ract_t_min": cleanValue(log.data.p_ract_t_min),
+                    "p_ract_into_grid": cleanValue(log.data.p_ract_into_grid),
+                    "p_ract_into_load": cleanValue(log.data.p_ract_into_load),
+
+                    // Apparent Power
+                    "p_apparent_r_ave": cleanValue(log.data.p_apparent_r_ave),
+                    "p_apparent_r_cur": cleanValue(log.data.p_apparent_r_cur),
+                    "p_apparent_r_max": cleanValue(log.data.p_apparent_r_max),
+                    "p_apparent_r_min": cleanValue(log.data.p_apparent_r_min),
+                    "p_apparent_s_ave": cleanValue(log.data.p_apparent_s_ave),
+                    "p_apparent_s_cur": cleanValue(log.data.p_apparent_s_cur),
+                    "p_apparent_s_max": cleanValue(log.data.p_apparent_s_max),
+                    "p_apparent_s_min": cleanValue(log.data.p_apparent_s_min),
+                    "p_apparent_t_ave": cleanValue(log.data.p_apparent_t_ave),
+                    "p_apparent_t_cur": cleanValue(log.data.p_apparent_t_cur),
+                    "p_apparent_t_max": cleanValue(log.data.p_apparent_t_max),
+                    "p_apparent_t_min": cleanValue(log.data.p_apparent_t_min),
+                    "p_apparent_into_grid": cleanValue(log.data.p_apparent_into_grid),
+                    "p_apparent_into_load": cleanValue(log.data.p_apparent_into_load),
+
+                    // Harmonics
+                    "harmonic_1_R": cleanValue(log.data.harmonic_1_R),
+                    "harmonic_1_S": cleanValue(log.data.harmonic_1_S),
+                    "harmonic_1_T": cleanValue(log.data.harmonic_1_T),
+                    "harmonic_2_R": cleanValue(log.data.harmonic_2_R),
+                    "harmonic_2_S": cleanValue(log.data.harmonic_2_S),
+                    "harmonic_2_T": cleanValue(log.data.harmonic_2_T),
+                    "harmonic_3_R": cleanValue(log.data.harmonic_3_R),
+                    "harmonic_3_S": cleanValue(log.data.harmonic_3_S),
+                    "harmonic_3_T": cleanValue(log.data.harmonic_3_T),
+                    "harmonic_4_R": cleanValue(log.data.harmonic_4_R),
+                    "harmonic_4_S": cleanValue(log.data.harmonic_4_S),
+                    "harmonic_4_T": cleanValue(log.data.harmonic_4_T),
+                    "harmonic_5_R": cleanValue(log.data.harmonic_5_R),
+                    "harmonic_5_S": cleanValue(log.data.harmonic_5_S),
+                    "harmonic_5_T": cleanValue(log.data.harmonic_5_T),
+                    "harmonic_6_R": cleanValue(log.data.harmonic_6_R),
+                    "harmonic_6_S": cleanValue(log.data.harmonic_6_S),
+                    "harmonic_6_T": cleanValue(log.data.harmonic_6_T),
+                    "harmonic_7_R": cleanValue(log.data.harmonic_7_R),
+                    "harmonic_7_S": cleanValue(log.data.harmonic_7_S),
+                    "harmonic_7_T": cleanValue(log.data.harmonic_7_T),
+                    "harmonic_8_R": cleanValue(log.data.harmonic_8_R),
+                    "harmonic_8_S": cleanValue(log.data.harmonic_8_S),
+                    "harmonic_8_T": cleanValue(log.data.harmonic_8_T),
+                    "harmonic_9_R": cleanValue(log.data.harmonic_9_R),
+                    "harmonic_9_S": cleanValue(log.data.harmonic_9_S),
+                    "harmonic_9_T": cleanValue(log.data.harmonic_9_T),
+                    "harmonic_10_R": cleanValue(log.data.harmonic_10_R),
+                    "harmonic_10_S": cleanValue(log.data.harmonic_10_S),
+                    "harmonic_10_T": cleanValue(log.data.harmonic_10_T),
+                    "harmonic_11_R": cleanValue(log.data.harmonic_11_R),
+                    "harmonic_11_S": cleanValue(log.data.harmonic_11_S),
+                    "harmonic_11_T": cleanValue(log.data.harmonic_11_T),
+                    "harmonic_12_R": cleanValue(log.data.harmonic_12_R),
+                    "harmonic_12_S": cleanValue(log.data.harmonic_12_S),
+                    "harmonic_12_T": cleanValue(log.data.harmonic_12_T),
+                    "harmonic_13_R": cleanValue(log.data.harmonic_13_R),
+                    "harmonic_13_S": cleanValue(log.data.harmonic_13_S),
+                    "harmonic_13_T": cleanValue(log.data.harmonic_13_T),
+                    "harmonic_14_R": cleanValue(log.data.harmonic_14_R),
+                    "harmonic_14_S": cleanValue(log.data.harmonic_14_S),
+                    "harmonic_14_T": cleanValue(log.data.harmonic_14_T),
+                    "harmonic_15_R": cleanValue(log.data.harmonic_15_R),
+                    "harmonic_15_S": cleanValue(log.data.harmonic_15_S),
+                    "harmonic_15_T": cleanValue(log.data.harmonic_15_T)
                 }));
 
             // ۴. ساخت شیت اکسل

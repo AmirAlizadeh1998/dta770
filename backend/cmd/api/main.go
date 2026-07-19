@@ -44,7 +44,9 @@ func main() {
 	// ۲. ساخت کانفیگ کلاینت OpenAI (GapGPT)
 	gapGptConfig := openai.DefaultConfig(cfg.GapAPIKey)
 	gapGptConfig.BaseURL = "https://api.gapgpt.app/v1"
-	aiClient := openai.NewClientWithConfig(gapGptConfig)
+	gapGptClient := openai.NewClientWithConfig(gapGptConfig)
+	openaiClient := openai.NewClient(cfg.OpenAiApiKey)
+
 	// ۱. اجرای دیتابیس
 	database.InitDB()
 
@@ -84,7 +86,8 @@ func main() {
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
 	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
-	mux.HandleFunc("/api/chat", middleware.MainMiddleware(handlers.AiChatHandler(aiClient)))
+	mux.HandleFunc("/api/ai/chat", middleware.MainMiddleware(handlers.AiChatHandler(gapGptClient)))
+	mux.HandleFunc("/api/ai/file-search", middleware.MainMiddleware(handlers.AiFileSearchHandler(openaiClient)))
 	mux.HandleFunc("/api/users", middleware.MainMiddleware(usersRouter))
 	mux.HandleFunc("/api/users/profile", middleware.MainMiddleware(handlers.UserProfileHandler))
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))
