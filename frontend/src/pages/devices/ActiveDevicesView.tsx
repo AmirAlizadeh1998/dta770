@@ -6,7 +6,9 @@ interface Device {
     id: number;
     device_name: string;
     owner_name: string;
-    customer_id: string
+    customer_id: string;
+    acin: string;
+    end_time: string;
     imei: string;
     last_seen_at: string;
 }

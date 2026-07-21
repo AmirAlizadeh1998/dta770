@@ -223,15 +223,16 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	// اضافه شدن d.owner_name به سلکت
 	rows, err := database.DB.Query(`
 		SELECT 
 			d.id, 
 			d.device_name, 
 			d.owner_name, 
-			d.imei, 
+			d.imei,
+			d.end_time,
 			l.created_at AS last_seen_at,
-			l.data->>'customer_id' AS customer_id
+			l.data->>'customer_id' AS customer_id,
+			l.data->>'acin' AS acin  -- ✨ این خط اضافه شد
 		FROM 
 			devices d
 		JOIN LATERAL (
@@ -251,14 +252,15 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	// اضافه شدن فیلد OwnerName به استراکت
 	type ActiveDevice struct {
 		ID           int       `json:"id"`
 		CustomerID   string    `json:"customer_id"`
-		OwnerName    string    `json:"owner_name"` // <--- اضافه شد
+		OwnerName    string    `json:"owner_name"`
 		IMEI         string    `json:"imei"`
+		EndTime      string    `json:"end_time"`
 		LastSeenAt   time.Time `json:"last_seen_at"`
 		CustomerName string    `json:"device_name"`
+		Acin         string    `json:"acin"` // ✨ این فیلد اضافه شد
 	}
 
 	var devices []ActiveDevice
@@ -267,33 +269,44 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		var d ActiveDevice
 		var customerID sql.NullString
 		var customerName sql.NullString
-		var ownerName sql.NullString // <--- متغیر برای نام مالک
+		var endTime sql.NullTime
+		var ownerName sql.NullString
+		var acin sql.NullString // ✨ متغیر کمکی برای acin
 
-		// دقت کن که ترتیب متغیرها تو Scan باید دقیقاً مثل SELECT بالا باشه
-		// id, device_name, owner_name, imei, last_seen_at, customer_id
-		err := rows.Scan(&d.ID, &customerName, &ownerName, &d.IMEI, &d.LastSeenAt, &customerID)
+		// ✨ متغیر acin به Scan اضافه شد (ترتیب باید دقیقاً مثل SELECT باشه)
+		err := rows.Scan(&d.ID, &customerName, &ownerName, &d.IMEI, &endTime, &d.LastSeenAt, &customerID, &acin)
 		if err != nil {
 			log.Printf("scan device error: %v", err)
 			continue
 		}
 
-		// مقداردهی نام مالک
 		if ownerName.Valid && ownerName.String != "" {
 			d.OwnerName = ownerName.String
 		} else {
-			d.OwnerName = "نامشخص" // اگه خالی بود پیش‌فرض بذاریم
+			d.OwnerName = "نامشخص"
 		}
 
-		// مقداردهی نام مشتری اگه نال نبود
 		if customerName.Valid {
 			d.CustomerName = customerName.String
 		}
 
-		// چک کردن و مقداردهی کد دستگاه
 		if customerID.Valid && customerID.String != "" {
 			d.CustomerID = customerID.String
 		} else {
 			d.CustomerID = "نامشخص"
+		}
+
+		if endTime.Valid {
+			d.EndTime = endTime.Time.Format(time.RFC3339)
+		} else {
+			d.EndTime = ""
+		}
+
+		// ✨ مقداردهی acin
+		if acin.Valid && acin.String != "" {
+			d.Acin = acin.String
+		} else {
+			d.Acin = "0" // مقدار پیش‌فرض اگه وجود نداشت
 		}
 
 		devices = append(devices, d)
