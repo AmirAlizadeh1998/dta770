@@ -3,10 +3,11 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"dta770/internal/analysis/models"
 
-	openai "github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go"
 )
 
 func GenerateReport(
@@ -19,28 +20,15 @@ func GenerateReport(
 		return "", err
 	}
 
-	resp, err := client.CreateChatCompletion(
-		context.Background(),
-		openai.ChatCompletionRequest{
-			Model: openai.GPT4o,
-
-			Temperature: 0.2,
-
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: SystemPrompt,
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: userMessage,
-				},
-			},
+	resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+		Model: "claude-fable-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(SystemPrompt),
+			openai.UserMessage(userMessage),
 		},
-	)
-
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("AI request failed: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {

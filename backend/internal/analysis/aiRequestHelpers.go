@@ -18,8 +18,8 @@ func BuildAIRequest(records []models.Record) models.AIRequest {
 
 	return models.AIRequest{
 		Timestamp: models.TimestampRange{
-			From: records[0].Timestamp,
-			To:   records[len(records)-1].Timestamp,
+			From: records[len(records)-1].Timestamp,
+			To:   records[0].Timestamp,
 		},
 		Statistics: stats,
 		Warnings:   DetectWarnings(stats),

@@ -2,10 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go"
 )
 
 type ChatRequest struct {
@@ -39,20 +38,14 @@ func handlePostChat(client *openai.Client, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	resp, err := client.CreateChatCompletion(
-		r.Context(),
-		openai.ChatCompletionRequest{
-			Model: openai.GPT4o,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: req.Prompt,
-				},
-			},
+	resp, err := client.Chat.Completions.New(r.Context(), openai.ChatCompletionNewParams{
+		Model: "gpt-4o",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("سلام!"),
 		},
-	)
+	})
 	if err != nil {
-		http.Error(w, fmt.Sprintf("خطا در اتصال به OpenAI: %v", err), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

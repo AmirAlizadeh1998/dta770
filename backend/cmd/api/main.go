@@ -11,7 +11,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 )
 
 func usersRouter(w http.ResponseWriter, r *http.Request) {
@@ -25,69 +26,60 @@ func usersRouter(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		handlers.DeleteUserHandler(w, r)
 	default:
-		http.Error(w, "متد غیرمجاز", http.StatusMethodNotAllowed) // کد $405$
+		http.Error(w, "متد غیرمجاز", http.StatusMethodNotAllowed)
 	}
 }
 
-// نکته مهم: این خط پایین کامنت معمولی نیست، دستور کامپایلره! حتما باید باشه.
-//
 //go:embed dist
 var frontend embed.FS
 
 func main() {
-	// ۱. لود کردن کانفیگ برای یک‌بار در کل چرخه حیات برنامه
+	// ۱. لود کردن کانفیگ
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// ۲. ساخت کانفیگ کلاینت OpenAI (GapGPT)
-	gapGptConfig := openai.DefaultConfig(cfg.GapAPIKey)
-	gapGptConfig.BaseURL = "https://api.gapgpt.app/v1"
-	gapGptClient := openai.NewClientWithConfig(gapGptConfig)
-	openaiClient := openai.NewClient(cfg.OpenAiApiKey)
+	// ۲. ساخت کلاینت رسمی OpenAI با BaseURL سفارشی GapGPT
+	gapGptClient := openai.NewClient(
+		option.WithBaseURL("https://api.gapgpt.app/v1"),
+		option.WithAPIKey(cfg.GapAPIKey),
+	)
 
-	// ۱. اجرای دیتابیس
+	// ۳. اجرای دیتابیس
 	database.InitDB()
 
-	// ۲. تنظیم روت‌ها
+	// ۴. تنظیم روت‌ها
 	mux := http.NewServeMux()
 
-	// --- بخش فرانت‌اند (اصلاح شده برای مشکل ۴۰۴ تو SPAها) ---
+	// --- بخش فرانت‌اند (SPA fallback) ---
 	distFs, err := fs.Sub(frontend, "dist")
 	if err != nil {
 		log.Fatal("خطا در پیدا کردن پوشه فرانت‌اند: ", err)
 	}
 
-	// فایل‌سرور استاندارد رو می‌ریزیم تو یه متغیر
 	fileServer := http.FileServer(http.FS(distFs))
 
-	// به جای mux.Handle، یه هندلر سفارشی با mux.HandleFunc می‌نویسیم
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// مسیر درخواستی رو درمیاریم
 		reqPath := r.URL.Path
 		if reqPath == "/" {
 			reqPath = "index.html"
 		} else {
-			reqPath = reqPath[1:] // اسلشِ اولِ مسیر رو حذف می‌کنیم تا بگرده تو پوشه
+			reqPath = reqPath[1:]
 		}
 
-		// با fs.Stat چک می‌کنیم ببینیم اصلا همچین فایلی تو dist داریم؟
 		if _, err := fs.Stat(distFs, reqPath); err != nil {
-			// اگه فایل رو پیدا نکرد (ارور داد)، یعنی یه مسیریه که مال خود Reactـه
-			// پس آدرس رو گول می‌زنیم و برمی‌گردونیم به روت تا index.html رو لود کنه!
 			r.URL.Path = "/"
 		}
 
-		// حالا درخواست رو می‌دیم دست فایل‌سرور تا زحمت سِرو کردنش رو بکشه
 		fileServer.ServeHTTP(w, r)
 	})
 	// ----------------------------------------
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
 	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
-	mux.HandleFunc("/api/ai/chat", middleware.MainMiddleware(handlers.AiChatHandler(gapGptClient)))
-	mux.HandleFunc("/api/ai/file-search", middleware.MainMiddleware(handlers.AiFileSearchHandler(openaiClient)))
+	//mux.HandleFunc("/api/ai/chat", middleware.MainMiddleware(handlers.AiChatHandler(&gapGptClient)))
+	mux.HandleFunc("/api/ai/file-search", middleware.MainMiddleware(handlers.AiFileSearchHandler(&gapGptClient)))
 	mux.HandleFunc("/api/users", middleware.MainMiddleware(usersRouter))
 	mux.HandleFunc("/api/users/profile", middleware.MainMiddleware(handlers.UserProfileHandler))
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))
@@ -101,10 +93,6 @@ func main() {
 	mux.HandleFunc("/api/get-device-logs", middleware.MainMiddleware(handlers.GetDeviceLogs))
 	mux.HandleFunc("/api/export-device-logs", middleware.MainMiddleware(handlers.ExportDeviceLogsHandler))
 
-	//hash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
-	//fmt.Println("New Hash for 123456:", string(hash))
-
-	// ۳. اجرای سرور
 	fmt.Println("🚀 Server running on http://localhost:8080 ...")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
