@@ -2,10 +2,9 @@ package ai
 
 import (
 	"context"
+	"dta770/internal/analysis/models"
 	"errors"
 	"fmt"
-
-	"dta770/internal/analysis/models"
 
 	"github.com/openai/openai-go"
 )

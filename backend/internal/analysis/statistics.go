@@ -6,6 +6,23 @@ import "dta770/internal/analysis/models"
 
 func CalculateStatistics(records []models.Record) models.Statistics {
 
+	// آستانه فیلتر — رکوردهایی که جریان کل زیر این مقدار باشه حذف میشن
+	const minCurrentThreshold = 0.5 // آمپر
+
+	pfFilterR := func(r models.Record) bool {
+		return r.Current.R.Value >= minCurrentThreshold
+	}
+	pfFilterS := func(r models.Record) bool {
+		return r.Current.S.Value >= minCurrentThreshold
+	}
+	pfFilterT := func(r models.Record) bool {
+		return r.Current.T.Value >= minCurrentThreshold
+	}
+	pfFilter := func(r models.Record) bool {
+		totalCurrent := r.Current.R.Value + r.Current.S.Value + r.Current.T.Value
+		return totalCurrent >= minCurrentThreshold
+	}
+
 	return models.Statistics{
 		// VOLTAGE
 		Voltage: models.VoltageStatistics{
@@ -108,18 +125,18 @@ func CalculateStatistics(records []models.Record) models.Statistics {
 
 		// POWER FACTOR
 		PowerFactor: models.PowerFactorStatistics{
-			R: calculateMetricSummary(records, func(r models.Record) models.Metric {
+			R: calculateMetricSummaryFiltered(records, func(r models.Record) models.Metric {
 				return r.PowerFactor.R
-			}),
-			S: calculateMetricSummary(records, func(r models.Record) models.Metric {
+			}, pfFilterR), // ← فیلتر اختصاصی فاز R
+			S: calculateMetricSummaryFiltered(records, func(r models.Record) models.Metric {
 				return r.PowerFactor.S
-			}),
-			T: calculateMetricSummary(records, func(r models.Record) models.Metric {
+			}, pfFilterS), // ← فیلتر اختصاصی فاز S
+			T: calculateMetricSummaryFiltered(records, func(r models.Record) models.Metric {
 				return r.PowerFactor.T
-			}),
-			Total: calculateMetricSummary(records, func(r models.Record) models.Metric {
+			}, pfFilterT), // ← فیلتر اختصاصی فاز T
+			Total: calculateMetricSummaryFiltered(records, func(r models.Record) models.Metric {
 				return r.PowerFactor.Total
-			}),
+			}, pfFilter), // ← مجموع سه‌فاز برای Total منطقیه
 		},
 
 		//POWER

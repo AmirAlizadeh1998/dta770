@@ -116,3 +116,43 @@ func calculateThreePhasePowerSummary(
 		}),
 	}
 }
+
+// summarize.go — اضافه کن
+
+func calculateSummaryFiltered(
+	records []models.Record,
+	selector func(models.Record) float64,
+	filter func(models.Record) bool,
+) models.Summary {
+	filtered := make([]models.Record, 0, len(records))
+	for _, r := range records {
+		if filter(r) {
+			filtered = append(filtered, r)
+		}
+	}
+	if len(filtered) == 0 {
+		return models.Summary{}
+	}
+	return calculateSummary(filtered, selector)
+}
+
+func calculateMetricSummaryFiltered(
+	records []models.Record,
+	selector func(models.Record) models.Metric,
+	filter func(models.Record) bool,
+) models.MetricSummary {
+	return models.MetricSummary{
+		Value: calculateSummaryFiltered(records, func(r models.Record) float64 {
+			return selector(r).Value
+		}, filter),
+		Average: calculateSummaryFiltered(records, func(r models.Record) float64 {
+			return selector(r).Average
+		}, filter),
+		Maximum: calculateSummaryFiltered(records, func(r models.Record) float64 {
+			return selector(r).Maximum
+		}, filter),
+		Minimum: calculateSummaryFiltered(records, func(r models.Record) float64 {
+			return selector(r).Minimum
+		}, filter),
+	}
+}

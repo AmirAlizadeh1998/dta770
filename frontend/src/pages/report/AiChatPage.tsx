@@ -72,7 +72,7 @@ function AiChatPage() {
             console.error('خطا:', error);
             setMessages(prev => prev.map(msg =>
                 msg.id === aiMessageId
-                    ? { ...msg, text: `خطا در ارتباط با سرور دایی! 🤦‍♂️ \n جزئیات: ${error.message}` }
+                    ? { ...msg, text: `خطا در ارتباط با سرور \n جزئیات: ${error.message}` }
                     : msg
             ));
         } finally {
