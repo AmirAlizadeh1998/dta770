@@ -1,7 +1,7 @@
-import {useEffect, useState} from 'react';
+import { useEffect, useState } from 'react';
 import Select from 'react-select';
-import {apiFetch} from "../../api/ApiClient.ts";
-import type {Device, DeviceDetailsResponse} from "../../models/device.ts";
+import { apiFetch } from "../../api/ApiClient.ts";
+import type { Device, DeviceDetailsResponse } from "../../models/device.ts";
 import {
     BasicInfoTab,
     CurrentTab, FrqTab,
@@ -9,9 +9,9 @@ import {
     TimeInfoTable,
     VoltageTab
 } from "../../components/deviceMonitorPage/MonitorComponents";
-import {TABS} from "../../models/consts";
+import { TABS } from "../../models/consts";
 import ChartDashboard from "../../components/deviceMonitorPage/ChartView.tsx";
-import {VoltageAlarmTable} from "../../components/deviceMonitorPage/AlarmTableComponent.tsx";
+import { VoltageAlarmTable } from "../../components/deviceMonitorPage/AlarmTableComponent.tsx";
 
 interface DeviceMonitorProps {
     initialImei?: string | null;
@@ -90,11 +90,48 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
     }, [selectedImei, token]);
 
     return (
-        <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '20px', fontFamily: 'IRANSans, Tahoma, sans-serif' }}>
+        <div style={{
+            width: '100%',
+            maxWidth: '1000px',
+            margin: '20px auto',
+            padding: '15px',
+            fontFamily: 'IRANSans, Tahoma, sans-serif',
+            boxSizing: 'border-box'
+        }}>
+            {/* استایل‌های کمکی برای حل چالش‌های رسپانسیو مدیا کوئری در اینلاین */}
+            <style>{`
+                .tabs-container {
+                    display: flex;
+                    border-bottom: 2px solid #eee;
+                    margin-top: 30px;
+                    direction: rtl;
+                    gap: 15px;
+                    padding-bottom: 0;
+                    overflow-x: auto;
+                    white-space: nowrap;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .tabs-container::-webkit-scrollbar {
+                    display: none; /* مخفی کردن اسکرول‌بار برای زیبایی بیشتر */
+                }
+                .tab-item {
+                    padding: 10px 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: all 0.3s ease;
+                    flex-shrink: 0; /* جلوگیری از فشرده شدن تب‌ها در موبایل */
+                }
+                @media (max-width: 600px) {
+                    .tab-item {
+                        font-size: 13px;
+                        padding: 8px 6px;
+                    }
+                }
+            `}</style>
 
             {/* بخش انتخاب دستگاه */}
-            <div style={{ marginBottom: '30px', direction: 'rtl' }}>
-                <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#333' }}>
+            <div style={{ marginBottom: '20px', direction: 'rtl' }}>
+                <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#333', fontSize: '15px' }}>
                     دستگاه مورد نظر رو انتخاب کن:
                 </label>
                 <Select
@@ -108,7 +145,12 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                     noOptionsMessage={() => "دستگاهی پیدا نشد"}
                     styles={{
                         control: (base) => ({
-                            ...base, padding: '4px', borderRadius: '8px', borderColor: '#ddd', fontSize: '16px'
+                            ...base,
+                            padding: '2px',
+                            borderRadius: '8px',
+                            borderColor: '#ddd',
+                            fontSize: '15px',
+                            minHeight: '40px'
                         })
                     }}
                 />
@@ -116,25 +158,26 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
 
             {deviceDetails && (
                 <>
-                    {/* اطلاعات زمانی */}
-                    <TimeInfoTable
-                        deviceDetails={deviceDetails}
-                        isDeviceOffline={isDeviceOffline}
-                        isMissionEnded={isMissionEnded}
-                    />
+                    {/* اطلاعات زمانی (اطمینان حاصل کن که داخل خود این کامپوننت هم ریسپانسیو چیده شده باشه) */}
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                        <TimeInfoTable
+                            deviceDetails={deviceDetails}
+                            isDeviceOffline={isDeviceOffline}
+                            isMissionEnded={isMissionEnded}
+                        />
+                    </div>
 
-                    {/* هدر تب‌ها */}
-                    <div style={{ display: 'flex', borderBottom: '2px solid #eee', marginTop: '30px', direction: 'rtl', gap: '30px', paddingBottom: '0' }}>
+                    {/* هدر تب‌ها با قابلیت اسکرول روی موبایل */}
+                    <div className="tabs-container">
                         {TABS.map((tab) => (
                             <div
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
+                                className="tab-item"
                                 style={{
-                                    padding: '10px 5px', cursor: 'pointer', fontSize: '14px',
                                     fontWeight: activeTab === tab.id ? 'bold' : 'normal',
                                     color: activeTab === tab.id ? '#17a2b8' : '#888',
                                     borderBottom: activeTab === tab.id ? '3px solid #17a2b8' : '3px solid transparent',
-                                    transition: 'all 0.3s ease'
                                 }}
                             >
                                 {tab.label}
@@ -143,7 +186,16 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                     </div>
 
                     {/* محتوای تب‌ها */}
-                    <div style={{ border: '1px solid #eee', borderRadius: '8px', padding: '20px', marginTop: '20px', direction: 'rtl', backgroundColor: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    <div style={{
+                        border: '1px solid #eee',
+                        borderRadius: '8px',
+                        padding: '15px',
+                        marginTop: '15px',
+                        direction: 'rtl',
+                        backgroundColor: '#fff',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                        overflowX: 'auto' /* اگر جداول داخلی عریض بودن، اسکرول افقی بخورند و قالب به هم نریزد */
+                    }}>
                         {activeTab === 'basic' && <BasicInfoTab deviceDetails={deviceDetails} isDeviceOffline={isDeviceOffline} />}
                         {activeTab === 'voltage' && <VoltageTab deviceDetails={deviceDetails} />}
                         {activeTab === 'current' && <CurrentTab deviceDetails={deviceDetails} />}
@@ -151,8 +203,14 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                         {activeTab === 'frequency' && <FrqTab deviceDetails={deviceDetails} />}
                     </div>
 
-                    <ChartDashboard imei={deviceDetails.imei}/>
-                    <VoltageAlarmTable deviceDetails={deviceDetails} />
+                    {/* بخش نمودار و آلارم‌ها */}
+                    <div style={{ width: '100%', overflowX: 'hidden', marginTop: '20px' }}>
+                        <ChartDashboard imei={deviceDetails.imei}/>
+                    </div>
+
+                    <div style={{ width: '100%', overflowX: 'auto', marginTop: '20px' }}>
+                        <VoltageAlarmTable deviceDetails={deviceDetails} />
+                    </div>
                 </>
             )}
         </div>
