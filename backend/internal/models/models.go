@@ -219,11 +219,11 @@ type LogData struct {
 }
 
 type DeviceDetailsResponse struct {
-	IMEI              string          `json:"imei"`
-	Data              LogData         `json:"data"`
-	CreatedAt         time.Time       `json:"created_at"`
-	StartTime         *time.Time      `json:"start_time"`
-	EndTime           *time.Time      `json:"end_time"`
-	LastValidDataTime *time.Time      `json:"last_valid_data_time"`
-	Alarm             json.RawMessage `json:"alarm,omitempty"`
+	IMEI              string            `json:"imei"`
+	Data              map[string]string `json:"data"`
+	CreatedAt         time.Time         `json:"created_at"`
+	StartTime         *time.Time        `json:"start_time"`
+	EndTime           *time.Time        `json:"end_time"`
+	LastValidDataTime *time.Time        `json:"last_valid_data_time"`
+	Alarm             json.RawMessage   `json:"alarm,omitempty"`
 }
