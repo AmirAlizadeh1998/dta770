@@ -260,8 +260,6 @@ func normalizeValueToString(v any) string {
 		return val
 
 	case float64:
-		// جلوگیری از نمایش 235.0 به شکل 235
-		// و نگه داشتن عددها به شکل تمیز
 		return strconv.FormatFloat(val, 'f', -1, 64)
 
 	case bool:
