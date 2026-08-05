@@ -118,7 +118,7 @@ func DeviceMonitorDetailHandler(w http.ResponseWriter, r *http.Request) {
 		latest = &logs[0]
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"device":      device,
 		"latest_log":  latest,
 		"recent_logs": logs,
@@ -170,7 +170,7 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		LIMIT 1
 	`
 
-	var startTimeParam, endTimeParam interface{}
+	var startTimeParam, endTimeParam any
 	if startTime.Valid {
 		startTimeParam = startTime.Time
 	}
@@ -180,6 +180,17 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = database.DB.QueryRow(validLogQuery, deviceIMEI, startTimeParam, endTimeParam).
 		Scan(&validLogDataBytes, &lastValidDataTime)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Printf("No valid log found for imei=%s", deviceIMEI)
+			validLogDataBytes = []byte(`{}`)
+		} else {
+			log.Printf("Error fetching valid log: %v", err)
+			http.Error(w, `{"error": "خطا در دریافت آخرین لاگ معتبر"}`, http.StatusInternalServerError)
+			return
+		}
+	}
 
 	// --- مرحله ۳: وضعیت فعلی رو چک می‌کنیم (آیا آخرین لاگ ثبت شده آفلاینه؟) ---
 	var lastStatus string
@@ -197,19 +208,18 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- مرحله ۴: تجمیع اطلاعات ---
-	var finalLogData models.LogData
-	if len(validLogDataBytes) > 0 {
-		if err := json.Unmarshal(validLogDataBytes, &finalLogData); err != nil {
-			log.Printf("Error unmarshaling log data: %v", err)
-		}
+	finalLogData, err := normalizeLogData(validLogDataBytes)
+	if err != nil {
+		log.Printf("Error normalizing log data: %v", err)
+		http.Error(w, `{"error": "خطا در تبدیل داده لاگ"}`, http.StatusInternalServerError)
+		return
 	}
 
 	// اگه آخرین لاگ ثبت شده کلمه offline بود، وضعیت رو توی فیلد IMEI لاگِ نهایی ست می‌کنیم
 	if lastStatus == "offline" {
-		finalLogData.IMEI = "offline"
+		finalLogData["IMEI"] = "offline"
 	} else if lastStatus != "" {
-		// اگه آفلاین نبود، می‌تونی همون IMEI اصلی دستگاه رو توش بذاری
-		finalLogData.IMEI = deviceIMEI
+		finalLogData["IMEI"] = deviceIMEI
 	}
 
 	response := models.DeviceDetailsResponse{
@@ -238,4 +248,46 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+}
+
+func normalizeValueToString(v any) string {
+	if v == nil {
+		return "null"
+	}
+
+	switch val := v.(type) {
+	case string:
+		return val
+
+	case float64:
+		// جلوگیری از نمایش 235.0 به شکل 235
+		// و نگه داشتن عددها به شکل تمیز
+		return strconv.FormatFloat(val, 'f', -1, 64)
+
+	case bool:
+		return strconv.FormatBool(val)
+
+	default:
+		return ""
+	}
+}
+
+func normalizeLogData(raw []byte) (map[string]string, error) {
+	var rawMap map[string]any
+
+	if len(raw) == 0 {
+		return map[string]string{}, nil
+	}
+
+	if err := json.Unmarshal(raw, &rawMap); err != nil {
+		return nil, err
+	}
+
+	normalized := make(map[string]string, len(rawMap))
+
+	for key, value := range rawMap {
+		normalized[key] = normalizeValueToString(value)
+	}
+
+	return normalized, nil
 }
