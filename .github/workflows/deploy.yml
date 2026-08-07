@@ -41,7 +41,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: dta770-binary
-        path: dta770 # اسم فایل باینری که Go تولید کرده (اگر مسیرش فرق داره اینجا تغییر بده)
+        path: backend/cmd/api/dta770
 
     # -------------- این مرحله جا افتاده بود --------------
     - name: 🚀 Upload binary to Server (SCP)
