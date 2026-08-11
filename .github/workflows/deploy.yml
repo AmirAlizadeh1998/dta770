@@ -44,6 +44,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 3031
           source: "backend/dta770"
           target: "/opt/dta770/"
           strip_components: 1
@@ -55,6 +56,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 3031
           script: |
             sudo chmod +x /opt/dta770/dta770
             sudo systemctl restart dta770
