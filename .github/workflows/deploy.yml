@@ -1,4 +1,4 @@
-name: Deploy Go-React App
+name: Build Go-React App
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
-    runs-on: self-hosted # تغییر به رانر سرور خودت
+  build:
+    runs-on: ubuntu-latest # استفاده از سرورهای خود گیت‌هاب
 
     steps:
       - name: 📥 Checkout Code
@@ -38,9 +38,8 @@ jobs:
         working-directory: ./backend
         run: GOOS=linux GOARCH=amd64 go build -o dta770 ./cmd/api
 
-      - name: 🚀 Deploy and Restart Service
-        # این مرحله جایگزین ssh و scp شد
-        run: |
-          sudo cp backend/dta770 /opt/dta770/dta770
-          sudo chmod +x /opt/dta770/dta770
-          sudo systemctl restart dta770
+      - name: 📦 Upload Artifact (Ready to download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dta770-linux-amd64 # اسمی که موقع دانلود می‌بینی
+          path: backend/dta770     # مسیر فایلی که باید آپلود بشه
