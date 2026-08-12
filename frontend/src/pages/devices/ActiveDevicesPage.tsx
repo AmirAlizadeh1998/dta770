@@ -26,7 +26,7 @@ export const DeviceCard = ({ device, onViewMonitor }: DeviceProps) => {
 
     // چک کردن اینکه آیا زمان الان از end_time رد شده یا نه
     const isOffline = device.end_time && !isNaN(new Date(device.end_time).getTime())
-        ? new Date() > new Date(device.end_time) && String(device.acin) === "1"
+        ? new Date() > new Date(device.end_time)
         : false
     return (
         <div className="bg-white p-5 rounded-2xl shadow-sm border hover:shadow-md transition-shadow">
