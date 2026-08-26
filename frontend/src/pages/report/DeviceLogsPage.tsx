@@ -167,11 +167,17 @@ const LogsTable = () => {
                 return;
             }
 
-            const cleanValue = (val: string | undefined | null) => {
-                // اگه مقدار خالی بود یا nan و -nan بود، یه خط تیره برمی‌گردونه
-                if (!val || val.toLowerCase() === 'nan' || val.toLowerCase() === '-nan') {
-                    return '-'; // یا می‌تونی بجاش '0' بذاری
+            const cleanValue = (val: any) => {
+                // اگه کلا خالی بود
+                if (val === null || val === undefined || val === '') {
+                    return '-';
                 }
+                // تبدیل به رشته فقط برای چک کردن کلمه‌ی nan
+                const strVal = String(val).toLowerCase();
+                if (strVal === 'nan' || strVal === '-nan') {
+                    return '-';
+                }
+                // خود مقدار رو برمی‌گردونیم تا توی اکسل هم به عنوان "عدد" شناخته بشه نه متن
                 return val;
             };
 

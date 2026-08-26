@@ -15,6 +15,7 @@ dist-ssr
 
 # Environmental variables
 .env
+.env.example
 .env.local
 .env.*.local
 
