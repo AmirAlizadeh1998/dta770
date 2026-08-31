@@ -27,19 +27,22 @@ function AiChatPage() {
         if (e) e.preventDefault();
         if (!selectedFile) return;
 
-        // پیام فرضی کاربر فقط برای نمایش در UI
         const userMsg: Message = {
             id: Date.now(),
             sender: 'user',
-            text: `لطفاً فایل ${selectedFile.name} را تحلیل کن 📊`
+            text: `لطفاً فایل ${selectedFile.name} را تحلیل کن`
         };
 
         setMessages(prev => [...prev, userMsg]);
-        setLoading(true);
 
-        // یک پیام در حال انتظار برای AI می‌سازیم
         const aiMessageId = Date.now() + 1;
-        setMessages(prev => [...prev, { id: aiMessageId, sender: 'ai', text: 'در حال خواندن و تحلیل فایل... (این مرحله ممکن است زمان‌بر باشد) ⏳' }]);
+        setMessages(prev => [...prev, {
+            id: aiMessageId,
+            sender: 'ai',
+            text: 'در حال اتصال به هوش مصنوعی... ⏳'
+        }]);
+
+        setLoading(true);
 
         try {
             const formData = new FormData();
@@ -53,31 +56,97 @@ function AiChatPage() {
                 body: formData,
             });
 
+            // چک کردن Content-Type قبل از هر کاری
+            const contentType = res.headers.get('content-type');
+
+            // اگه خطا داشتیم
             if (!res.ok) {
-                const errData = await res.json();
-                throw new Error(errData.error || 'خطا در سرور');
+                if (contentType?.includes('application/json')) {
+                    const errData = await res.json();
+                    throw new Error(errData.error || 'خطا در سرور');
+                } else {
+                    const errText = await res.text();
+                    throw new Error(errText || `خطا در سرور: ${res.status}`);
+                }
             }
 
-            // چون بک‌اند منتظر میمونه و در نهایت JSON میده، ما هم همون رو یکجا میخونیم
-            const data = await res.json();
+            // چک کردن اینکه واقعا SSE هست
+            if (!contentType?.includes('text/event-stream')) {
+                throw new Error(`نوع پاسخ نامعتبر است: ${contentType}`);
+            }
 
-            // آپدیت کردن پیام دستیار با جواب نهایی
-            setMessages(prev => prev.map(msg =>
-                msg.id === aiMessageId
-                    ? { ...msg, text: data.message }
-                    : msg
-            ));
+            if (!res.body) {
+                throw new Error('ReadableStream توسط مرورگر پشتیبانی نمی‌شود.');
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let fullReport = '';
+            let buffer = '';
+            let isDone = false;
+
+            while (!isDone) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+
+                // آخرین خط ممکنه ناقص باشه، پس نگه‌اش می‌داریم
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+
+                    if (line.startsWith('data:')) {
+                        let dataContent = line.substring(5).trim();
+
+                        // چک کردن برای پایان stream
+                        if (dataContent === '[DONE]') {
+                            isDone = true;
+                            break;
+                        }
+
+                        // چک کردن برای error
+                        if (dataContent.startsWith('[ERROR:')) {
+                            const errorMsg = dataContent.substring(7, dataContent.length - 1);
+                            throw new Error(errorMsg);
+                        }
+
+                        // تبدیل escaped characters به حالت واقعی
+                        dataContent = dataContent
+                            .replace(/\\\\/g, '\\')   // اول backslash دوتایی
+                            .replace(/\\n/g, '\n')    // بعد newline
+                            .replace(/\\r/g, '\r')    // بعد carriage return
+                            .replace(/\\"/g, '"');    // آخر هم quote
+
+                        fullReport += dataContent;
+
+                        // به‌روزرسانی پیام AI در real-time
+                        setMessages(prev => prev.map(msg =>
+                            msg.id === aiMessageId
+                                ? { ...msg, text: fullReport }
+                                : msg
+                        ));
+                    }
+                }
+            }
+
+            // اگه هیچ چیزی دریافت نشد
+            if (!fullReport.trim()) {
+                throw new Error('هیچ داده‌ای از سرور دریافت نشد');
+            }
 
         } catch (error: any) {
             console.error('خطا:', error);
             setMessages(prev => prev.map(msg =>
                 msg.id === aiMessageId
-                    ? { ...msg, text: `خطا در ارتباط با سرور \n جزئیات: ${error.message}` }
+                    ? { ...msg, text: `❌ خطا در ارتباط با سرور\n\nجزئیات: ${error.message}` }
                     : msg
             ));
         } finally {
             setLoading(false);
-            setSelectedFile(null); // خالی کردن فایل بعد از اتمام
+            setSelectedFile(null);
         }
     };
 

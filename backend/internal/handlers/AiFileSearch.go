@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -22,7 +23,6 @@ func AiFileSearchHandler(client *openai.Client) http.HandlerFunc {
 			return
 		}
 
-		// حداکثر حجم فایل: مثلا 25MB
 		if err := r.ParseMultipartForm(25 << 20); err != nil {
 			log.Printf("ParseMultipartForm error: %v\n", err)
 			writeJSONError(w, "فرمت درخواست یا حجم فایل نامعتبر است", http.StatusBadRequest)
@@ -37,7 +37,6 @@ func AiFileSearchHandler(client *openai.Client) http.HandlerFunc {
 		}
 		defer uploadedFile.Close()
 
-		// ذخیره فایل آپلودشده در temp
 		tempDir := os.TempDir()
 		safeFileName := filepath.Base(fileHeader.Filename)
 		tempPath := filepath.Join(tempDir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), safeFileName))
@@ -72,7 +71,7 @@ func AiFileSearchHandler(client *openai.Client) http.HandlerFunc {
 
 		records, err := analysis.ParseExcel(tempPath)
 		if err != nil {
-			fmt.Printf("ParseCSV error: %v\n", err)
+			fmt.Printf("ParseExcel error: %v\n", err)
 			writeJSONError(w, "خطا در خواندن فایل", http.StatusBadRequest)
 			return
 		}
@@ -84,18 +83,50 @@ func AiFileSearchHandler(client *openai.Client) http.HandlerFunc {
 
 		req := analysis.BuildAIRequest(records)
 
-		b, _ := json.MarshalIndent(req, "", "  ")
-		fmt.Println(string(b))
+		// ═══════════════════════════════════════════════════════
+		// تا اینجا همه چیز JSON error بود
+		// از اینجا به بعد SSE شروع میشه
+		// ═══════════════════════════════════════════════════════
 
-		report, err := ai.GenerateReport(client, req)
-		if err != nil {
-			writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			writeJSONError(w, "Streaming not supported by server", http.StatusInternalServerError)
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{
-			"message": report,
-		})
+		// ست کردن headers برای SSE
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-transform")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+
+		// این خیلی مهمه - باید status رو قبل از اولین write بفرستی
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+
+		onChunk := func(chunk string) {
+			// JSON escape برای محتوای فارسی و special characters
+			safeChunk := strings.ReplaceAll(chunk, "\\", "\\\\")
+			safeChunk = strings.ReplaceAll(safeChunk, "\n", "\\n")
+			safeChunk = strings.ReplaceAll(safeChunk, "\r", "\\r")
+			safeChunk = strings.ReplaceAll(safeChunk, "\"", "\\\"")
+
+			fmt.Fprintf(w, "data: %s\n\n", safeChunk)
+			flusher.Flush()
+		}
+
+		err = ai.GenerateReportStream(r.Context(), client, req, onChunk)
+		if err != nil {
+			log.Printf("Stream error: %v\n", err)
+			// حالا که توی SSE mode هستیم، خطا رو به صورت SSE میفرستیم
+			errMsg := strings.ReplaceAll(err.Error(), "\n", "\\n")
+			fmt.Fprintf(w, "data: [ERROR: %s]\n\n", errMsg)
+			flusher.Flush()
+			return
+		}
+
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
 	}
 }
 

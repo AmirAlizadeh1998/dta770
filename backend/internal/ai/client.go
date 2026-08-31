@@ -3,36 +3,46 @@ package ai
 import (
 	"context"
 	"dta770/internal/analysis/models"
-	"errors"
 	"fmt"
 
 	"github.com/openai/openai-go"
 )
 
-func GenerateReport(
+// GenerateReportStream تحلیل رو به صورت تکه‌تکه (Stream) برای جلوگیری از تایم‌اوت ارسال می‌کنه
+func GenerateReportStream(
+	ctx context.Context,
 	client *openai.Client,
 	req models.AIRequest,
-) (string, error) {
-
+	onChunk func(string),
+) error {
 	userMessage, err := BuildUserMessage(req)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to build user message: %w", err)
 	}
 
-	resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+	// ایجاد استریم رکوئست با مدل و پرامپت‌های اختصاصی خودت
+	stream := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
 		Model: "claude-fable-5",
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(SystemPrompt),
 			openai.UserMessage(userMessage),
 		},
 	})
-	if err != nil {
-		return "", fmt.Errorf("AI request failed: %w", err)
+
+	// خوندن توکن‌به‌توکن پاسخ و پاس دادنش به کال‌بک هندلر
+	for stream.Next() {
+		chunk := stream.Current()
+		if len(chunk.Choices) > 0 {
+			content := chunk.Choices[0].Delta.Content
+			if content != "" {
+				onChunk(content)
+			}
+		}
 	}
 
-	if len(resp.Choices) == 0 {
-		return "", errors.New("empty response")
+	if err := stream.Err(); err != nil {
+		return fmt.Errorf("stream error: %w", err)
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	return nil
 }
