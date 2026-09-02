@@ -60,9 +60,10 @@ const timeframeOptions = [
 
 interface ChartDashboardProps {
     imei: string;
+    deviceName: string;
 }
 
-const ChartDashboard = ({ imei }: ChartDashboardProps) => {
+const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
     const [selectedParam, setSelectedParam] = useState(parameterOptions[0].value);
     const [selectedTime, setSelectedTime] = useState(timeframeOptions[0].value);
 
@@ -76,7 +77,13 @@ const ChartDashboard = ({ imei }: ChartDashboardProps) => {
             setError(null);
 
             try {
-                const apiUrl = `/api/monitor/chart?imei=${imei}&param=${selectedParam}&timeframe=${selectedTime}`;
+                const params = new URLSearchParams({
+                    imei,
+                    device_name: deviceName,
+                    param: selectedParam,
+                    timeframe: selectedTime
+                });
+                const apiUrl = `/api/monitor/chart?${params.toString()}`;
 
                 const response = await fetch(apiUrl, {
                     headers: {
@@ -99,10 +106,10 @@ const ChartDashboard = ({ imei }: ChartDashboardProps) => {
             }
         };
 
-        if (imei) {
+        if (imei && deviceName) {
             fetchChartData();
         }
-    }, [imei, selectedParam, selectedTime]);
+    }, [imei, deviceName, selectedParam, selectedTime]);
 
     // محاسبه مقادیر حداقل و حداکثر
     const minMaxData = useMemo(() => {

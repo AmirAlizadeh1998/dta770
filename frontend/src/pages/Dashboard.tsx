@@ -21,6 +21,7 @@ import DeviceMonitorPage from "./report/DeviceMonitorPage.tsx";
 import DataAnalyzePage from "./report/DataAnalyzePage.tsx";
 import { UserProfilePage } from "./profile/UserProfilePage.tsx";
 import AiChatPage from "./report/AiChatPage.tsx";
+import type { DeviceMonitorSelection } from "../models/device.ts";
 
 const menuItems = [
     // ... دقیقاً همون منوهای خودت ...
@@ -64,7 +65,7 @@ const menuItems = [
 export function Dashboard() {
     const [openMenu, setOpenMenu] = useState<number | null>(0)
     const [activeView, setActiveView] = useState<string>("devices-active")
-    const [activeDeviceImei, setActiveDeviceImei] = useState<string | null>(null)
+    const [activeDevice, setActiveDevice] = useState<DeviceMonitorSelection | null>(null)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false) // 👈 استیت جدید برای منوی موبایل
     const navigate = useNavigate()
 
@@ -125,7 +126,15 @@ export function Dashboard() {
 
     useEffect(() => {
         const handler = (e: any) => {
-            setActiveDeviceImei(e.detail)
+            // رویدادهای قدیمی فقط IMEI می‌فرستادند؛ رویداد جدید نام و IMEI را با هم می‌فرستد.
+            if (typeof e.detail === "string") {
+                setActiveDevice({ deviceName: "", imei: e.detail })
+            } else if (e.detail?.imei) {
+                setActiveDevice({
+                    deviceName: e.detail.deviceName || "",
+                    imei: e.detail.imei
+                })
+            }
             setActiveView("monitor")
             setIsMobileMenuOpen(false)
         }
@@ -173,7 +182,7 @@ export function Dashboard() {
             case "users-list": return <UsersListView />
             case "users-roles": return <UsersRolesView />
             case "logs": return <LogsTable />
-            case "monitor": return <DeviceMonitorPage initialImei={activeDeviceImei} />
+            case "monitor": return <DeviceMonitorPage initialDevice={activeDevice} />
             case "analyze": return <DataAnalyzePage/>
             case "analyze-ai": return <AiChatPage/>
             case "profile": return <UserProfilePage/>

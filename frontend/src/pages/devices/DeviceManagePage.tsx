@@ -152,19 +152,43 @@ export default function DeviceManagePage() {
 
     const validate = (): boolean => {
         const e: Partial<Record<keyof DeviceForm, string>> = {}
-        if (!form.deviceName.trim()) e.deviceName = "نام دستگاه اجباری است"
+        const trimmedName = form.deviceName.trim()
+        const trimmedImei = form.imei.trim()
+
+        if (!trimmedName) e.deviceName = "نام دستگاه اجباری است"
         if (!form.ownerName.trim()) e.ownerName = "نام مالک اجباری است"
-        if (!form.imei.trim()) {
+
+        if (!trimmedImei) {
             e.imei = "IMEI اجباری است"
-        } else if (!/^\d{15}$/.test(form.imei)) {
+        } else if (!/^\d{15}$/.test(trimmedImei)) {
             e.imei = "IMEI باید ۱۵ رقم باشد"
         }
+
+        // چک تکراری بودن ترکیب Name + IMEI در کلاینت (به جز رکوردی که در حال ویرایش است)
+        if (trimmedName && trimmedImei) {
+            const isDuplicate = devices.some(
+                (d) =>
+                    d.id !== editingId &&
+                    d.device_name.toLowerCase() === trimmedName.toLowerCase() &&
+                    d.imei === trimmedImei
+            )
+
+            if (isDuplicate) {
+                e.deviceName = "ترکیب نام و IMEI تکراری است"
+                e.imei = "ترکیب نام و IMEI تکراری است"
+            }
+        }
+
         setErrors(e)
         return Object.keys(e).length === 0
     }
 
     const handleChange = (key: keyof DeviceForm, value: string | boolean) => {
         setForm((prev) => ({ ...prev, [key]: value }))
+        // پاک کردن ارور فیلد موقع ویرایش کاربر
+        if (errors[key]) {
+            setErrors((prev) => ({ ...prev, [key]: undefined }))
+        }
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -234,14 +258,19 @@ export default function DeviceManagePage() {
             const data = await response.json()
 
             if (!response.ok) {
-                // اگه سرور ارور داد (مثل خطای تکراری بودن IMEI)، همون پیام رو نشون میدیم
                 console.error(data.message || "خطا در ذخیره اطلاعات")
                 alert(data.message || "خطایی رخ داده است ❌")
 
-                // اگه دوست داشتی زیر فیلد اینپوت هم قرمز بشه، این خط رو هم از کامنت دربیار:
-                setErrors((prev) => ({ ...prev, imei: data.message || "IMEI تکراری است" }))
+                // اگر خطای تکراری بودن (409 Conflict) بود، زیر هر دو فیلد نام دستگاه و IMEI ارور بذار
+                if (response.status === 409) {
+                    setErrors((prev) => ({
+                        ...prev,
+                        deviceName: "ترکیب این نام و IMEI تکراری است",
+                        imei: "این IMEI با این نام قبلاً ثبت شده است",
+                    }))
+                }
 
-                return // 👈 این return خیلی مهمه! باعث میشه کد ادامه پیدا نکنه و پیام موفقیت نده
+                return // 👈 جلوی ادامه عملیات گرفته میشه
             }
 
             alert(data.message || "با موفقیت ثبت شد!")

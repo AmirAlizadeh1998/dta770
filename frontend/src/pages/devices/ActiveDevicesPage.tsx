@@ -1,3 +1,5 @@
+import type { DeviceMonitorSelection } from "../../models/device.ts";
+
 interface DeviceProps {
     device: {
         id: number;
@@ -9,7 +11,7 @@ interface DeviceProps {
         imei: string;
         last_seen_at: string;
     };
-    onViewMonitor?: (deviceImei: string) => void;
+    onViewMonitor?: (selection: DeviceMonitorSelection) => void;
 }
 
 export const DeviceCard = ({ device, onViewMonitor }: DeviceProps) => {
@@ -58,7 +60,10 @@ export const DeviceCard = ({ device, onViewMonitor }: DeviceProps) => {
             <p className="text-gray-500 text-sm mb-4">کد دستگاه: {device.customer_id || "نامشخص"}</p>
 
             <button
-                onClick={() => onViewMonitor && onViewMonitor(device.imei)}
+                onClick={() => onViewMonitor?.({
+                    deviceName: device.device_name,
+                    imei: device.imei
+                })}
                 className="w-full py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium rounded-lg transition-colors text-sm"
             >
                 مشاهده جزئیات

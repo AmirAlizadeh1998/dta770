@@ -237,6 +237,7 @@ type LogData struct {
 
 type DeviceDetailsResponse struct {
 	IMEI              string            `json:"imei"`
+	DeviceName        string            `json:"device_name"`
 	Data              map[string]string `json:"data"`
 	CreatedAt         time.Time         `json:"created_at"`
 	StartTime         *time.Time        `json:"start_time"`

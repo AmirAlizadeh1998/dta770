@@ -1,35 +1,79 @@
 import { useEffect, useState } from 'react';
 import Select from 'react-select';
 import { apiFetch } from "../../api/ApiClient.ts";
-import type { Device, DeviceDetailsResponse } from "../../models/device.ts";
+import type {
+    Device,
+    DeviceDetailsResponse,
+    DeviceMonitorSelection
+} from "../../models/device.ts";
 import {
     BasicInfoTab,
     CurrentTab, FrqTab,
     PowerTab,
     TimeInfoTable,
     VoltageTab
-} from "../../components/deviceMonitorPage/MonitorComponents";
+} from "../../components/deviceMonitorPage/MonitorComponents.tsx";
 import { TABS } from "../../models/consts";
 import ChartDashboard from "../../components/deviceMonitorPage/ChartView.tsx";
 import { VoltageAlarmTable } from "../../components/deviceMonitorPage/AlarmTableComponent.tsx";
 
 interface DeviceMonitorProps {
     initialImei?: string | null;
+    initialDevice?: DeviceMonitorSelection | null;
 }
 
-const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
+// تایپ آپشن‌های Select برای تایپ سیف بودن کامل
+interface DeviceOption {
+    value: string;
+    label: string;
+    deviceName: string;
+    imei: string;
+    originalData: Device;
+}
+
+const getDeviceKey = (deviceName: string, imei: string) =>
+    `${deviceName}-${imei}`;
+
+const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) => {
+    const getDeviceStatus = (): 'unknown' | 'offline' | 'online' => {
+        const data = deviceDetails?.data;
+
+        // ۱. اگر دیتا کلا نیومده بود (null یا undefined)
+        if (!data) return 'unknown';
+
+        // ۲. اگر بک‌اند آبجکت یا آرایه خالی فرستاده بود {} یا []
+        if (typeof data === 'object' && Object.keys(data).length === 0) return 'unknown';
+
+        // ۳. اگر بک‌اند Go استراکت رو با مقادیر پیش‌فرض (خالی) فرستاده باشه
+        // مثلا چک می‌کنیم اگر مدل، کد و ... خالی بود و آفلاین هم نبود، یعنی دیتای مفیدی نداریم
+        if (!data.model && !data.customer_id && !data.work_clock && data.IMEI !== "offline") {
+            return 'unknown';
+        }
+
+        // ۴. بررسی حالت آفلاین
+        if (data.IMEI === "offline") {
+            return 'offline';
+        }
+
+        // ۵. اگر هیچکدوم از بالا نبود، پس دستگاه واقعا روشنه و دیتا داره
+        return 'online';
+    };
+
     const [devices, setDevices] = useState<Device[]>([]);
-    const [selectedImei, setSelectedImei] = useState<string | null>(null);
+    const [selectedDevice, setSelectedDevice] = useState<DeviceMonitorSelection | null>(null);
     const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsResponse | null>(null);
     const [activeTab, setActiveTab] = useState('basic');
     const token = localStorage.getItem("token");
 
-    const isDeviceOffline = deviceDetails?.data?.IMEI === "offline";
+    const deviceStatus = getDeviceStatus();
     const isMissionEnded = !!(deviceDetails?.end_time && new Date(deviceDetails.end_time) < new Date());
 
-    const options = devices.map((device) => ({
-        value: device.imei,
+    // مقدار گزینه، ترکیب نام دستگاه و IMEI است تا جستجو و انتخاب بر اساس همین شناسه انجام شود.
+    const options: DeviceOption[] = devices.map((device) => ({
+        value: getDeviceKey(device.device_name, device.imei),
         label: `${device.device_name} - ${device.imei}`,
+        deviceName: device.device_name,
+        imei: device.imei,
         originalData: device
     }));
 
@@ -40,7 +84,12 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await response.json();
-                setDevices(data);
+                const deviceList = Array.isArray(data)
+                    ? data
+                    : Array.isArray(data?.data)
+                        ? data.data
+                        : [];
+                setDevices(deviceList);
             } catch (error) {
                 console.error("خطا در دریافت لیست دستگاه‌ها:", error);
             }
@@ -49,45 +98,74 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
     }, [token]);
 
     useEffect(() => {
-        if (initialImei && devices.length > 0) {
-            const optionToSelect = options.find(opt => opt.value === initialImei);
-            if (optionToSelect && selectedImei !== initialImei) {
-                handleDeviceChange(optionToSelect);
-            }
-        }
-    }, [initialImei, devices]);
+        if (devices.length === 0) return;
 
-    const fetchDeviceDetails = async (imei: string) => {
+        const requestedImei = initialDevice?.imei || initialImei;
+        if (!requestedImei) return;
+
+        const deviceToSelect = devices.find((device) => {
+            if (initialDevice?.deviceName) {
+                return device.device_name === initialDevice.deviceName &&
+                    device.imei === requestedImei;
+            }
+            return device.imei === requestedImei;
+        });
+
+        if (deviceToSelect) {
+            setDeviceDetails(null);
+            setSelectedDevice({
+                deviceName: deviceToSelect.device_name,
+                imei: deviceToSelect.imei
+            });
+        }
+    }, [initialDevice, initialImei, devices]);
+
+    // دریافت جزئیات دستگاه با ترکیب نام و IMEI
+    const fetchDeviceDetails = async (deviceName: string, imei: string) => {
         try {
-            const response = await fetch(`/api/monitor/devices?imei=${imei}`, {
+            const queryParams = new URLSearchParams({
+                device_name: deviceName,
+                imei: imei
+            });
+            const response = await fetch(`/api/monitor/devices?${queryParams.toString()}`, {
                 method: "GET",
                 headers: { "Authorization": `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('خطا در دریافت اطلاعات دستگاه');
             const data = await response.json();
-            setDeviceDetails(data);
+            setDeviceDetails({
+                ...data,
+                // برای سازگاری با پاسخ‌های قدیمی، نام انتخاب‌شده را نگه می‌داریم.
+                device_name: data.device_name || deviceName
+            });
         } catch (error) {
             console.error("خطا:", error);
         }
     };
 
-    const handleDeviceChange = (selectedOption: any) => {
+    const handleDeviceChange = (selectedOption: DeviceOption | null) => {
         if (!selectedOption) {
-            setSelectedImei(null);
+            setSelectedDevice(null);
             setDeviceDetails(null);
             return;
         }
-        setSelectedImei(selectedOption.value);
+        setDeviceDetails(null);
+        setSelectedDevice({
+            deviceName: selectedOption.deviceName,
+            imei: selectedOption.imei
+        });
     };
 
     useEffect(() => {
-        if (!selectedImei) return;
-        fetchDeviceDetails(selectedImei);
+        if (!selectedDevice) return;
+
+        fetchDeviceDetails(selectedDevice.deviceName, selectedDevice.imei);
         const intervalId = setInterval(() => {
-            fetchDeviceDetails(selectedImei);
+            fetchDeviceDetails(selectedDevice.deviceName, selectedDevice.imei);
         }, 30000);
+
         return () => clearInterval(intervalId);
-    }, [selectedImei, token]);
+    }, [selectedDevice, token]);
 
     return (
         <div style={{
@@ -98,7 +176,6 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
             fontFamily: 'IRANSans, Tahoma, sans-serif',
             boxSizing: 'border-box'
         }}>
-            {/* استایل‌های کمکی برای حل چالش‌های رسپانسیو مدیا کوئری در اینلاین */}
             <style>{`
                 .tabs-container {
                     display: flex;
@@ -112,14 +189,14 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                     -webkit-overflow-scrolling: touch;
                 }
                 .tabs-container::-webkit-scrollbar {
-                    display: none; /* مخفی کردن اسکرول‌بار برای زیبایی بیشتر */
+                    display: none;
                 }
                 .tab-item {
                     padding: 10px 8px;
                     cursor: pointer;
                     font-size: 14px;
                     transition: all 0.3s ease;
-                    flex-shrink: 0; /* جلوگیری از فشرده شدن تب‌ها در موبایل */
+                    flex-shrink: 0;
                 }
                 @media (max-width: 600px) {
                     .tab-item {
@@ -136,7 +213,19 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                 </label>
                 <Select
                     options={options}
-                    value={options.find(option => option.value === selectedImei) || null}
+                    value={
+                        selectedDevice
+                            ? options.find(
+                                (opt) =>
+                                    opt.value === getDeviceKey(
+                                        selectedDevice.deviceName,
+                                        selectedDevice.imei
+                                    )
+                            ) || null
+                            : null
+                    }
+                    getOptionLabel={(option) => option.label}
+                    getOptionValue={(option) => option.value}
                     onChange={handleDeviceChange}
                     isRtl={true}
                     isSearchable={true}
@@ -158,16 +247,14 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
 
             {deviceDetails && (
                 <>
-                    {/* اطلاعات زمانی (اطمینان حاصل کن که داخل خود این کامپوننت هم ریسپانسیو چیده شده باشه) */}
                     <div style={{ width: '100%', overflowX: 'auto' }}>
                         <TimeInfoTable
                             deviceDetails={deviceDetails}
-                            isDeviceOffline={isDeviceOffline}
+                            deviceStatus={deviceStatus}
                             isMissionEnded={isMissionEnded}
                         />
                     </div>
 
-                    {/* هدر تب‌ها با قابلیت اسکرول روی موبایل */}
                     <div className="tabs-container">
                         {TABS.map((tab) => (
                             <div
@@ -185,7 +272,6 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                         ))}
                     </div>
 
-                    {/* محتوای تب‌ها */}
                     <div style={{
                         border: '1px solid #eee',
                         borderRadius: '8px',
@@ -194,18 +280,20 @@ const DeviceMonitorPage = ({ initialImei }: DeviceMonitorProps) => {
                         direction: 'rtl',
                         backgroundColor: '#fff',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                        overflowX: 'auto' /* اگر جداول داخلی عریض بودن، اسکرول افقی بخورند و قالب به هم نریزد */
+                        overflowX: 'auto'
                     }}>
-                        {activeTab === 'basic' && <BasicInfoTab deviceDetails={deviceDetails} isDeviceOffline={isDeviceOffline} />}
+                        {activeTab === 'basic' && <BasicInfoTab deviceDetails={deviceDetails} deviceStatus={deviceStatus} />}
                         {activeTab === 'voltage' && <VoltageTab deviceDetails={deviceDetails} />}
                         {activeTab === 'current' && <CurrentTab deviceDetails={deviceDetails} />}
                         {activeTab === 'power' && <PowerTab deviceDetails={deviceDetails} />}
                         {activeTab === 'frequency' && <FrqTab deviceDetails={deviceDetails} />}
                     </div>
 
-                    {/* بخش نمودار و آلارم‌ها */}
                     <div style={{ width: '100%', overflowX: 'hidden', marginTop: '20px' }}>
-                        <ChartDashboard imei={deviceDetails.imei}/>
+                        <ChartDashboard
+                            imei={deviceDetails.imei}
+                            deviceName={selectedDevice?.deviceName || deviceDetails.device_name || ''}
+                        />
                     </div>
 
                     <div style={{ width: '100%', overflowX: 'auto', marginTop: '20px' }}>

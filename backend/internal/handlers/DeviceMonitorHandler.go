@@ -1,4 +1,4 @@
-// DeviceMonitorDetailHandler.go
+// DeviceMonitorHandler.go
 
 package handlers
 
@@ -80,9 +80,11 @@ func DeviceMonitorDetailHandler(w http.ResponseWriter, r *http.Request) {
 		SELECT id, data, created_at
 		FROM device_logs
 		WHERE imei = $1
+		AND ($2::timestamp IS NULL OR created_at >= $2)
+		AND ($3::timestamp IS NULL OR created_at <= $3)
 		ORDER BY created_at DESC
 		LIMIT 100
-	`, device.Imei)
+	`, device.Imei, device.StartTime, device.EndTime)
 
 	if err != nil {
 		log.Printf("logs query error: %v", err)
@@ -90,9 +92,7 @@ func DeviceMonitorDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-		}
+		_ = rows.Close()
 	}(rows)
 
 	type DeviceLog struct {
@@ -125,47 +125,63 @@ func DeviceMonitorDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		return
-	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	deviceIMEI := r.URL.Query().Get("imei")
-	if deviceIMEI == "" {
-		http.Error(w, `{"error": "IMEI رو نفرستادی رفیق!"}`, http.StatusBadRequest)
+	deviceName := r.URL.Query().Get("device_name")
+
+	if deviceIMEI == "" || deviceName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "هر دو پارامتر device_name و imei الزامی هستند رفیق!",
+		})
 		return
 	}
 
-	// --- مرحله ۱: اطلاعات پایه دستگاه رو از جدول devices می‌گیریم ---
+	// --- مرحله ۱: اطلاعات پایه دستگاه رو با ترکیب (device_name, imei) از جدول devices می‌گیریم ---
+	var persistedDeviceName string
 	var startTime, endTime sql.NullTime
 	var alarmData []byte
 
-	deviceQuery := `SELECT start_time, end_time, alarm FROM devices WHERE imei = $1`
-	err := database.DB.QueryRow(deviceQuery, deviceIMEI).Scan(&startTime, &endTime, &alarmData)
+	deviceQuery := `
+		SELECT device_name, start_time, end_time, alarm
+		FROM devices
+		WHERE device_name = $1 AND imei = $2
+		LIMIT 1
+	`
+	err := database.DB.QueryRow(deviceQuery, deviceName, deviceIMEI).
+		Scan(&persistedDeviceName, &startTime, &endTime, &alarmData)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, `{"error": "دستگاهی با این IMEI پیدا نشد!"}`, http.StatusNotFound)
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "دستگاهی با این مشخصات (نام و IMEI) پیدا نشد!",
+			})
 			return
 		}
 		log.Printf("Error fetching device details: %v", err)
-		http.Error(w, `{"error": "خطا در ارتباط با دیتابیس"}`, http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "خطا در ارتباط با دیتابیس",
+		})
 		return
 	}
 
-	// --- مرحله ۲: آخرین لاگ معتبر رو پیدا می‌کنیم (لاگ‌های آفلاین رو نادیده می‌گیریم) ---
+	// --- مرحله ۲: آخرین لاگ معتبر رو پیدا می‌کنیم (محدود به بازه زمانی همین دستگاه) ---
 	var validLogDataBytes []byte
 	var lastValidDataTime sql.NullTime
-	// نکته مهم: اینجا فرض کردیم لاگ معتبر همیشه کلید 'model' رو داره.
-	// از اپراتور ؟ توی PostgreSQL استفاده کردیم.
+
 	validLogQuery := `
 		SELECT data, created_at
 		FROM device_logs
 		WHERE imei = $1
 		AND data ? 'model'
-		AND ($2::timestamp IS NULL OR created_at >= $2) -- شرط زمان شروع
-		AND ($3::timestamp IS NULL OR created_at <= $3) -- شرط زمان پایان
+		AND ($2::timestamp IS NULL OR created_at >= $2) -- شرط زمان شروع اختصاصی این دستگاه
+		AND ($3::timestamp IS NULL OR created_at <= $3) -- شرط زمان پایان اختصاصی این دستگاه
 		ORDER BY created_at DESC
 		LIMIT 1
 	`
@@ -183,11 +199,14 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Printf("No valid log found for imei=%s", deviceIMEI)
+			log.Printf("No valid log found for imei=%s in this timeframe", deviceIMEI)
 			validLogDataBytes = []byte(`{}`)
 		} else {
 			log.Printf("Error fetching valid log: %v", err)
-			http.Error(w, `{"error": "خطا در دریافت آخرین لاگ معتبر"}`, http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "خطا در دریافت آخرین لاگ معتبر",
+			})
 			return
 		}
 	}
@@ -199,10 +218,12 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		SELECT (data->>'IMEI') as status, created_at
 		FROM device_logs
 		WHERE imei = $1
+		AND ($2::timestamp IS NULL OR created_at >= $2) -- شرط زمان شروع
+		AND ($3::timestamp IS NULL OR created_at <= $3) -- شرط زمان پایان
 		ORDER BY created_at DESC
 		LIMIT 1
 	`
-	err = database.DB.QueryRow(statusQuery, deviceIMEI).Scan(&lastStatus, &createdAt)
+	err = database.DB.QueryRow(statusQuery, deviceIMEI, startTimeParam, endTimeParam).Scan(&lastStatus, &createdAt)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Printf("Error fetching current status: %v", err)
 	}
@@ -211,11 +232,13 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	finalLogData, err := normalizeLogData(validLogDataBytes)
 	if err != nil {
 		log.Printf("Error normalizing log data: %v", err)
-		http.Error(w, `{"error": "خطا در تبدیل داده لاگ"}`, http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "خطا در تبدیل داده لاگ",
+		})
 		return
 	}
 
-	// اگه آخرین لاگ ثبت شده کلمه offline بود، وضعیت رو توی فیلد IMEI لاگِ نهایی ست می‌کنیم
 	if lastStatus == "offline" {
 		finalLogData["IMEI"] = "offline"
 	} else if lastStatus != "" {
@@ -223,8 +246,9 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := models.DeviceDetailsResponse{
-		IMEI: deviceIMEI,
-		Data: finalLogData,
+		IMEI:       deviceIMEI,
+		DeviceName: persistedDeviceName,
+		Data:       finalLogData,
 	}
 
 	if len(alarmData) > 0 {
@@ -243,11 +267,7 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		response.LastValidDataTime = &lastValidDataTime.Time
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		return
-	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func normalizeValueToString(v any) string {

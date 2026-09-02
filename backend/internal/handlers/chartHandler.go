@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"database/sql"
-	"dta770/internal/database" // پکیج دیتابیس خودت
+	"dta770/internal/database"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,14 +17,20 @@ type ChartData struct {
 }
 
 func GetDeviceChartData(w http.ResponseWriter, r *http.Request) {
-	// ۱. گرفتن پارامترها از کوئری
+	w.Header().Set("Content-Type", "application/json")
+
+	// ۱. گرفتن پارامترها از کوئری (هم device_name و هم imei)
 	q := r.URL.Query()
+	deviceName := q.Get("device_name")
 	imei := q.Get("imei")
 	param := q.Get("param")
 	timeframe := q.Get("timeframe")
 
-	if imei == "" || param == "" || timeframe == "" {
-		http.Error(w, "پارامترهای imei، param و timeframe الزامی هستند", http.StatusBadRequest)
+	if deviceName == "" || imei == "" || param == "" || timeframe == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "پارامترهای device_name، imei، param و timeframe همگی الزامی هستند",
+		})
 		return
 	}
 
@@ -62,31 +68,40 @@ func GetDeviceChartData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validParams[param] {
-		http.Error(w, "پارامتر درخواستی نامعتبر است", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "پارامتر درخواستی نامعتبر است"})
 		return
 	}
 
-	// ۳. دریافت بازه مجاز دستگاه از جدول devices
+	// ۳. دریافت بازه مجاز دستگاه از جدول devices با ترکیب (device_name, imei)
 	var devStartTime, devEndTime sql.NullTime
-	err := database.DB.QueryRow("SELECT start_time, end_time FROM devices WHERE imei = $1", imei).Scan(&devStartTime, &devEndTime)
+	deviceLimitQuery := `
+		SELECT start_time, end_time
+		FROM devices
+		WHERE device_name = $1 AND imei = $2
+		LIMIT 1
+	`
+	err := database.DB.QueryRow(deviceLimitQuery, deviceName, imei).Scan(&devStartTime, &devEndTime)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "دستگاه مورد نظر یافت نشد", http.StatusNotFound)
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "دستگاه مورد نظر با این مشخصات یافت نشد"})
 			return
 		}
 		log.Printf("Error fetching device limits: %v", err)
-		http.Error(w, "خطای داخلی در بررسی وضعیت دستگاه", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "خطای داخلی در بررسی وضعیت دستگاه"})
 		return
 	}
 
-	// 🌟 تعیین زمان مبنا (Anchor Time)
+	// ۴. تعیین زمان مبنا (Anchor Time)
 	// اگه دستگاه منقضی شده باشه، مبنا رو میذاریم روی زمان پایان دستگاه، وگرنه زمان فعلی سیستم
 	anchorTime := time.Now()
 	if devEndTime.Valid && devEndTime.Time.Before(anchorTime) {
 		anchorTime = devEndTime.Time
 	}
 
-	// ۴. محاسبه بازه زمانی درخواستی کاربر نسبت به زمان مبنا
+	// ۵. محاسبه بازه زمانی درخواستی کاربر نسبت به زمان مبنا
 	var reqStartTime time.Time
 	switch timeframe {
 	case "1h":
@@ -95,23 +110,23 @@ func GetDeviceChartData(w http.ResponseWriter, r *http.Request) {
 		reqStartTime = anchorTime.Add(-6 * time.Hour)
 	case "12h":
 		reqStartTime = anchorTime.Add(-12 * time.Hour)
-	case "18h": // 🌟 اضافه شد
+	case "18h":
 		reqStartTime = anchorTime.Add(-18 * time.Hour)
 	case "24h":
 		reqStartTime = anchorTime.Add(-24 * time.Hour)
-	case "30h": // 🌟 اضافه شد
+	case "30h":
 		reqStartTime = anchorTime.Add(-30 * time.Hour)
-	case "36h": // 🌟 اضافه شد
+	case "36h":
 		reqStartTime = anchorTime.Add(-36 * time.Hour)
-	case "48h": // 🌟 اضافه شد
+	case "48h":
 		reqStartTime = anchorTime.Add(-48 * time.Hour)
-	case "72h": // 🌟 اضافه شد
+	case "72h":
 		reqStartTime = anchorTime.Add(-72 * time.Hour)
 	default:
-		reqStartTime = anchorTime.Add(-1 * time.Hour) // پیش‌فرض ۱ ساعت
+		reqStartTime = anchorTime.Add(-1 * time.Hour)
 	}
 
-	// ۵. ترکیب بازه کاربر با بازه مجاز دستگاه (ایجاد محدودیت نهایی)
+	// ۶. ترکیب بازه کاربر با بازه مجاز دستگاه (محدودیت نهایی)
 	finalStartTime := reqStartTime
 	if devStartTime.Valid && finalStartTime.Before(devStartTime.Time) {
 		finalStartTime = devStartTime.Time
@@ -122,39 +137,35 @@ func GetDeviceChartData(w http.ResponseWriter, r *http.Request) {
 		finalEndTime = devEndTime.Time
 	}
 
-	// بررسی اینکه آیا تداخلی وجود دارد یا خیر
+	// اگر بازه نامعتبر باشد دیتای خالی برمی‌گردانیم
 	if finalStartTime.After(finalEndTime) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"data": []ChartData{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []ChartData{}})
 		return
 	}
 
-	// ۶. ساخت کوئری با اعمال شرط زمان شروع و پایان
+	// ۷. اجرای کوئری برای استخراج لاگ‌ها
 	query := fmt.Sprintf(`
-			SELECT created_at, (data->>'%s')::numeric AS val
-			FROM device_logs 
-			WHERE data::text ILIKE $1 
-			  AND created_at >= $2 
-			  AND created_at <= $3
-			ORDER BY created_at
-		`, param)
+		SELECT created_at, (data->>'%s')::numeric AS val
+		FROM device_logs
+		WHERE imei = $1
+		AND data ? '%s'
+		  AND created_at >= $2
+		  AND created_at <= $3
+		ORDER BY created_at ASC
+	`, param, param)
 
-	imeiSearch := "%" + imei + "%"
-
-	rows, err := database.DB.Query(query, imeiSearch, finalStartTime, finalEndTime)
+	rows, err := database.DB.Query(query, imei, finalStartTime, finalEndTime)
 	if err != nil {
 		log.Printf("Error querying chart data: %v", err)
-		http.Error(w, "خطای داخلی در دریافت دیتای نمودار", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "خطای داخلی در دریافت دیتای نمودار"})
 		return
 	}
 	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			log.Printf("Error closing rows in chart data: %v", err)
-		}
+		_ = rows.Close()
 	}(rows)
 
-	// ۷. خواندن و فرمت کردن دیتا
+	// ۸. خواندن و فرمت کردن دیتا
 	var results []ChartData
 
 	for rows.Next() {
@@ -179,7 +190,8 @@ func GetDeviceChartData(w http.ResponseWriter, r *http.Request) {
 
 	if err := rows.Err(); err != nil {
 		log.Printf("Error iterating chart rows: %v", err)
-		http.Error(w, "خطا در پردازش دیتای نمودار", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "خطا در پردازش دیتای نمودار"})
 		return
 	}
 
@@ -187,12 +199,7 @@ func GetDeviceChartData(w http.ResponseWriter, r *http.Request) {
 		results = []ChartData{}
 	}
 
-	// ۸. ارسال جواب
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"data": results,
 	})
-	if err != nil {
-		log.Printf("Error encoding chart response: %v", err)
-	}
 }

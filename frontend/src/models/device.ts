@@ -6,6 +6,11 @@ export interface Device {
     end_time: string;
 }
 
+export interface DeviceMonitorSelection {
+    deviceName: string;
+    imei: string;
+}
+
 export interface DeviceDetails {
     IMEI: string;
     acin: string;
@@ -170,6 +175,7 @@ export interface DeviceDetails {
 export interface DeviceDetailsResponse {
     created_at: string;
     imei: string;
+    device_name?: string;
     start_time: string;
     end_time: string;
     last_valid_data_time: string;

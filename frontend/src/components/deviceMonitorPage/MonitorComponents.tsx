@@ -2,207 +2,236 @@ import type {DeviceDetails, DeviceDetailsResponse} from "../../models/device";
 import {FormatSignalQuality, FormatToJalali, FormatWorkClock} from "../../utils/Formatters";
 import {CURRENT_CARDS, POWER_CARDS, VOLTAGE_CARDS, FRQ_CARDS} from "../../models/consts.ts"
 
-export const TimeInfoTable = ({deviceDetails, isDeviceOffline, isMissionEnded}: {
+
+
+export const TimeInfoTable = ({deviceDetails, deviceStatus, isMissionEnded}: {
     deviceDetails: DeviceDetailsResponse,
-    isDeviceOffline: boolean,
+    deviceStatus: 'unknown' | 'offline' | 'online',
     isMissionEnded: boolean
-}) => (
-    <>
-        <div style={{
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            marginTop: '20px',
-            direction: 'rtl',
-            backgroundColor: '#fff'
-        }}>
+}) => {
+    // تعیین رنگ بر اساس وضعیت
+    const statusColor = deviceStatus === 'unknown' ? '#6c757d' : (deviceStatus === 'offline' ? '#dc3545' : '#28a745');
+
+    return (
+        <>
             <div style={{
-                backgroundColor: '#2c3e50',
-                color: 'white',
-                textAlign: 'center',
-                padding: '12px',
-                fontWeight: 'bold',
-                fontSize: '15px'
-            }}>
-                اطلاعات زمانی دستگاه
-            </div>
-            <table style={{width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '14px'}}>
-                <tbody>
-                <tr>
-                    <td style={{padding: '12px', borderBottom: '1px solid #eee'}}>
-                        <div style={{color: '#666'}}>زمان شروع نصب</div>
-                        <div style={{color: '#0056b3', direction: 'ltr'}}>
-                            {deviceDetails.start_time ? FormatToJalali(deviceDetails.start_time) : '-'}
-                        </div>
-                    </td>
-
-                    <td style={{padding: '12px', borderRight: '1px solid #ddd', borderBottom: '1px solid #eee'}}>
-                        <div style={{color: '#666'}}>زمان اتمام ماموریت</div>
-                        <div style={{color: '#0056b3', direction: 'ltr'}}>
-                            {deviceDetails.end_time ? FormatToJalali(deviceDetails.end_time) : '-'}
-                        </div>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td style={{padding: '12px'}}>
-                        <div style={{color: '#666'}}>آخرین ارتباط با سرور</div>
-                        <div style={{
-                            color: isDeviceOffline ? '#dc3545' : '#28a745',
-                            direction: 'ltr',
-                            fontWeight: 'bold'
-                        }}>
-                            {deviceDetails.created_at ? FormatToJalali(deviceDetails.created_at) : '-'}
-                        </div>
-                    </td>
-
-                    <td style={{padding: '12px', borderRight: '1px solid #ddd'}}>
-                        <div style={{color: '#666'}}>زمان آخرین دیتا</div>
-                        <div style={{color: '#0056b3', direction: 'ltr'}}>
-                            {deviceDetails.last_valid_data_time
-                                ? FormatToJalali(deviceDetails.last_valid_data_time)
-                                : '-'}
-                        </div>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-
-        {isMissionEnded && (
-            <div style={{
-                backgroundColor: '#fd7e14',
-                color: '#fff',
-                padding: '12px 20px',
+                border: '1px solid #ddd',
                 borderRadius: '8px',
+                overflow: 'hidden',
                 marginTop: '20px',
                 direction: 'rtl',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
+                backgroundColor: '#fff'
             }}>
-                <span>🚩 ماموریت این دستگاه در تاریخ {deviceDetails.end_time ? FormatToJalali(deviceDetails.end_time) : '-'} پایان یافته است</span>
-            </div>
-        )}
-    </>
-);
-
-export const BasicInfoTab = ({deviceDetails, isDeviceOffline}: {
-    deviceDetails: DeviceDetailsResponse,
-    isDeviceOffline: boolean
-}) => (
-    <div>
-        <h4 style={{
-            color: '#444',
-            marginBottom: '20px',
-            borderBottom: '1px solid #f0f0f0',
-            paddingBottom: '10px'
-        }}>اطلاعات دستگاه</h4>
-        <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                <span style={{color: '#888', fontSize: '13px'}}>وضعیت دستگاه</span>
-                <span style={{
+                <div style={{
+                    backgroundColor: '#2c3e50',
+                    color: 'white',
+                    textAlign: 'center',
+                    padding: '12px',
                     fontWeight: 'bold',
+                    fontSize: '15px'
+                }}>
+                    اطلاعات زمانی دستگاه
+                </div>
+                <table style={{width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '14px'}}>
+                    <tbody>
+                    <tr>
+                        <td style={{padding: '12px', borderBottom: '1px solid #eee'}}>
+                            <div style={{color: '#666'}}>زمان شروع نصب</div>
+                            <div style={{color: '#0056b3', direction: 'ltr'}}>
+                                {deviceDetails.start_time ? FormatToJalali(deviceDetails.start_time) : '-'}
+                            </div>
+                        </td>
+
+                        <td style={{padding: '12px', borderRight: '1px solid #ddd', borderBottom: '1px solid #eee'}}>
+                            <div style={{color: '#666'}}>زمان اتمام ماموریت</div>
+                            <div style={{color: '#0056b3', direction: 'ltr'}}>
+                                {deviceDetails.end_time ? FormatToJalali(deviceDetails.end_time) : '-'}
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style={{padding: '12px'}}>
+                            <div style={{color: '#666'}}>آخرین ارتباط با سرور</div>
+                            <div style={{
+                                color: statusColor,
+                                direction: 'ltr',
+                                fontWeight: 'bold'
+                            }}>
+                                {/* اگر دستگاه نامشخصه، تاریخ ارتباط قبلی روی این IMEI رو نادیده بگیر */}
+                                {deviceStatus === 'unknown'
+                                    ? '-'
+                                    : (deviceDetails.created_at ? FormatToJalali(deviceDetails.created_at) : '-')}
+                            </div>
+                        </td>
+
+                        <td style={{padding: '12px', borderRight: '1px solid #ddd'}}>
+                            <div style={{color: '#666'}}>زمان آخرین دیتا</div>
+                            <div style={{color: '#0056b3', direction: 'ltr'}}>
+                                {/* برای آخرین دیتا هم همین کارو میکنیم */}
+                                {deviceStatus === 'unknown'
+                                    ? '-'
+                                    : (deviceDetails.last_valid_data_time ? FormatToJalali(deviceDetails.last_valid_data_time) : '-')}
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            {isMissionEnded && (
+                <div style={{
+                    backgroundColor: '#fd7e14',
+                    color: '#fff',
+                    padding: '12px 20px',
+                    borderRadius: '8px',
+                    marginTop: '20px',
+                    direction: 'rtl',
                     fontSize: '14px',
-                    color: isDeviceOffline ? '#dc3545' : '#28a745',
-                    backgroundColor: isDeviceOffline ? '#fce8e6' : '#e6f4ea',
-                    padding: '4px 12px',
-                    borderRadius: '6px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '5px'
+                    gap: '10px'
                 }}>
+                    <span>🚩 ماموریت این دستگاه در تاریخ {deviceDetails.end_time ? FormatToJalali(deviceDetails.end_time) : '-'} پایان یافته است</span>
+                </div>
+            )}
+        </>
+    );
+};
+
+export const BasicInfoTab = ({deviceDetails, deviceStatus}: {
+    deviceDetails: DeviceDetailsResponse,
+    deviceStatus: 'unknown' | 'offline' | 'online'
+}) => {
+
+    // تعریف استایل‌ها و متن‌های وضعیت
+    let statusText = 'نامشخص';
+    let statusColor = '#6c757d'; // خاکستری
+    let statusBg = '#e9ecef';
+
+    if (deviceStatus === 'online') {
+        statusText = 'روشن';
+        statusColor = '#28a745'; // سبز
+        statusBg = '#e6f4ea';
+    } else if (deviceStatus === 'offline') {
+        statusText = 'خاموش';
+        statusColor = '#dc3545'; // قرمز
+        statusBg = '#fce8e6';
+    }
+
+    return (
+        <div>
+            <h4 style={{
+                color: '#444',
+                marginBottom: '20px',
+                borderBottom: '1px solid #f0f0f0',
+                paddingBottom: '10px'
+            }}>اطلاعات دستگاه</h4>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <span style={{color: '#888', fontSize: '13px'}}>وضعیت دستگاه</span>
+                    <span style={{
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        color: statusColor,
+                        backgroundColor: statusBg,
+                        padding: '4px 12px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                    }}>
                     <span style={{
                         width: '8px',
                         height: '8px',
                         borderRadius: '50%',
-                        backgroundColor: isDeviceOffline ? '#dc3545' : '#28a745',
+                        backgroundColor: statusColor,
                         display: 'inline-block'
                     }}></span>
-                    {isDeviceOffline ? 'خاموش' : 'روشن'}
+                        {statusText}
                 </span>
-            </div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px dashed #eee',
-                paddingTop: '15px'
-            }}>
-                <span style={{color: '#888', fontSize: '13px'}}>شناسه یکتا دستگاه (IMEI)</span>
-                <span style={{fontWeight: 'bold', fontSize: '14px'}}>{deviceDetails.imei || '-'}</span>
-            </div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px dashed #eee',
-                paddingTop: '15px'
-            }}>
-                <span style={{color: '#888', fontSize: '13px'}}>مدل دستگاه</span>
-                <span style={{fontWeight: 'bold', fontSize: '14px'}}>{deviceDetails.data?.model || '-'}</span>
-            </div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px dashed #eee',
-                paddingTop: '15px'
-            }}>
-                <span style={{color: '#888', fontSize: '13px'}}>کد دستگاه</span>
-                <span style={{fontWeight: 'bold', fontSize: '14px'}}>{deviceDetails.data?.customer_id || '-'}</span>
-            </div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px dashed #eee',
-                paddingTop: '15px'
-            }}>
-                <span style={{color: '#888', fontSize: '13px'}}>ساعت کارکرد دستگاه</span>
-                <span style={{
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    direction: 'rtl'
-                }}>{deviceDetails.data?.work_clock ? FormatWorkClock(deviceDetails.data.work_clock) : '-'}</span>
-            </div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px dashed #eee',
-                paddingTop: '15px'
-            }}>
-                <span style={{color: '#888', fontSize: '13px'}}>کیفیت سیگنال ارتباطی</span>
-                <span style={{
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    direction: 'ltr'
-                }}>{deviceDetails.data?.sig_quality ? FormatSignalQuality(deviceDetails.data.sig_quality) : '-'}</span>
-            </div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px dashed #eee',
-                paddingTop: '15px'
-            }}>
-                <span style={{color: '#888', fontSize: '13px'}}>وضعیت برق</span>
-                <span style={{
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    color: deviceDetails.data?.acin === "1" ? '#28a745' : '#dc3545',
-                    backgroundColor: deviceDetails.data?.acin === "1" ? '#e6f4ea' : '#fce8e6',
-                    padding: '2px 8px',
-                    borderRadius: '4px'
+                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px dashed #eee',
+                    paddingTop: '15px'
                 }}>
-                    {deviceDetails.data?.acin === "1" ? 'وصل' : 'قطع'}
-                </span>
+                    <span style={{color: '#888', fontSize: '13px'}}>شناسه یکتا دستگاه (IMEI)</span>
+                    <span style={{fontWeight: 'bold', fontSize: '14px'}}>{deviceDetails.imei || '-'}</span>
+                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px dashed #eee',
+                    paddingTop: '15px'
+                }}>
+                    <span style={{color: '#888', fontSize: '13px'}}>مدل دستگاه</span>
+                    <span style={{fontWeight: 'bold', fontSize: '14px'}}>{deviceDetails.data?.model || '-'}</span>
+                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px dashed #eee',
+                    paddingTop: '15px'
+                }}>
+                    <span style={{color: '#888', fontSize: '13px'}}>کد دستگاه</span>
+                    <span style={{fontWeight: 'bold', fontSize: '14px'}}>{deviceDetails.data?.customer_id || '-'}</span>
+                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px dashed #eee',
+                    paddingTop: '15px'
+                }}>
+                    <span style={{color: '#888', fontSize: '13px'}}>ساعت کارکرد دستگاه</span>
+                    <span style={{
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        direction: 'rtl'
+                    }}>{deviceDetails.data?.work_clock ? FormatWorkClock(deviceDetails.data.work_clock) : '-'}</span>
+                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px dashed #eee',
+                    paddingTop: '15px'
+                }}>
+                    <span style={{color: '#888', fontSize: '13px'}}>کیفیت سیگنال ارتباطی</span>
+                    <span style={{
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        direction: 'ltr'
+                    }}>{deviceDetails.data?.sig_quality ? FormatSignalQuality(deviceDetails.data.sig_quality) : '-'}</span>
+                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px dashed #eee',
+                    paddingTop: '15px'
+                }}>
+                    <span style={{color: '#888', fontSize: '13px'}}>وضعیت برق</span>
+                    <span style={{
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        color: deviceDetails.data?.acin === "1" ? '#28a745' : (deviceStatus === 'unknown' ? '#6c757d' : '#dc3545'),
+                        backgroundColor: deviceDetails.data?.acin === "1" ? '#e6f4ea' : (deviceStatus === 'unknown' ? '#e9ecef' : '#fce8e6'),
+                        padding: '2px 8px',
+                        borderRadius: '4px'
+                    }}>
+                        {deviceDetails.data?.acin === "1" ? 'وصل' : (deviceStatus === 'unknown' ? 'نامشخص' : 'قطع')}
+                    </span>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const VoltageTab = ({deviceDetails}: { deviceDetails: DeviceDetailsResponse }) => (
     <div style={{

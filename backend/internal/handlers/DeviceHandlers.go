@@ -436,10 +436,16 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
+	// هدر خروجی رو همون اول JSON ست کنیم که در همه سناریوها معتبر باشه
+	w.Header().Set("Content-Type", "application/json")
+
 	var d models.Device
 
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		http.Error(w, "فرمت داده‌ها غلط است", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "فرمت داده‌ها نامعتبر است",
+		})
 		return
 	}
 
@@ -487,14 +493,12 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	).Scan(&newID)
 
 	if err != nil {
-		// اضافه کردن هدر JSON برای ارورها
-		w.Header().Set("Content-Type", "application/json")
-
-		// چک کردن خطای تکراری بودن IMEI
-		if strings.Contains(err.Error(), "unique_imei") || strings.Contains(err.Error(), "23505") {
-			w.WriteHeader(http.StatusConflict) // کد 409
+		// چک کردن خطای تکراری بودن ترکیب device_name و imei
+		// کد 23505 استاندارد Postgres برای Unique Violation هست
+		if strings.Contains(err.Error(), "unique_device_name_imei") || strings.Contains(err.Error(), "23505") {
+			w.WriteHeader(http.StatusConflict) // 409 Conflict
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"message": "این IMEI قبلاً در سیستم ثبت شده است! لطفا بررسی کنید. 🚫",
+				"message": "دستگاهی با این ترکیب نام و IMEI قبلاً ثبت شده است! 🚫",
 			})
 			return
 		}
@@ -507,6 +511,7 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusCreated) // 201 Created برای ساخت منبع جدید
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "دستگاه با موفقیت ذخیره شد",

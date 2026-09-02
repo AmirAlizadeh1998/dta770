@@ -59,9 +59,11 @@ export default function ActiveDevicesView() {
                         <DeviceCard
                             key={device.id}
                             device={device}
-                            onViewMonitor={(id) => {
-                                // بفرست برای داشبورد
-                                window.dispatchEvent(new CustomEvent("monitor-device", { detail: id }))
+                            onViewMonitor={(selection) => {
+                                // نام دستگاه و IMEI باید با هم منتقل شوند تا انتخاب در مانیتور یکتا باشد.
+                                window.dispatchEvent(new CustomEvent("monitor-device", {
+                                    detail: selection
+                                }))
                             }}
                         />
                     ))}
