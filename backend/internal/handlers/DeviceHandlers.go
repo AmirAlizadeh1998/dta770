@@ -350,10 +350,10 @@ func extractDeviceID(path string) (int, error) {
 func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 	rows, err := database.DB.Query(`
 		SELECT 
-			id, device_name, owner_name, imei, phone, address, longitude, latitude,
+			id, device_name, device_code, owner_name, imei, phone, address,
 			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 			distance_from_trans, cable_size, three_phase, materials,
-			description, is_active, voice_note_path, start_time, end_time, alarm
+			description, is_active, start_time, end_time, alarm
 		FROM devices
 		ORDER BY id DESC
 	`)
@@ -369,17 +369,16 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d models.Device
 		var startTime, endTime sql.NullTime
-		var alarm sql.NullString
+		var alarm, deviceCode sql.NullString
 
 		err := rows.Scan(
 			&d.Id,
 			&d.DeviceName,
+			&deviceCode,
 			&d.OwnerName,
 			&d.Imei,
 			&d.Phone,
 			&d.Address,
-			&d.Longitude,
-			&d.Latitude,
 			&d.FuseBox,
 			&d.NullConnection,
 			&d.FuseComb,
@@ -392,10 +391,9 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 			&d.Materials,
 			&d.Description,
 			&d.IsActive,
-			&d.VoiceNotePath,
 			&startTime,
 			&endTime,
-			&alarm, // ۲. اضافه کردن به اسکن (ترتیبش باید دقیقاً مثل کوئری SELECT باشه)
+			&alarm,
 		)
 
 		if err != nil {
@@ -415,6 +413,10 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		// ۳. اگر آلارم نال نبود، مقدارش رو می‌ریزیم تو دستگاه
 		if alarm.Valid {
 			d.Alarm = alarm.String
+		}
+
+		if deviceCode.Valid {
+			d.DeviceCode = deviceCode.String
 		}
 
 		devices = append(devices, d)
@@ -451,15 +453,15 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		INSERT INTO devices (
-			device_name, owner_name, imei, start_time, end_time, phone, address, longitude, latitude,
+			device_name, owner_name, imei, start_time, end_time, phone, address,
 			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 			distance_from_trans, cable_size, three_phase, materials,
-			description, is_active, voice_note_path
+			description, is_active, device_code
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8,
 			$9, $10, $11, $12, $13, $14,
 			$15, $16, $17, $18,
-			$19, $20, $21, $22
+			$19, $20
 		)
 		RETURNING id
 	`
@@ -475,8 +477,6 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		utils.NullableTime(d.EndTime),
 		d.Phone,
 		d.Address,
-		d.Longitude,
-		d.Latitude,
 		d.FuseBox,
 		d.NullConnection,
 		d.FuseComb,
@@ -489,16 +489,33 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		d.Materials,
 		d.Description,
 		d.IsActive,
-		d.VoiceNotePath,
+		d.DeviceCode,
 	).Scan(&newID)
 
 	if err != nil {
-		// چک کردن خطای تکراری بودن ترکیب device_name و imei
-		// کد 23505 استاندارد Postgres برای Unique Violation هست
-		if strings.Contains(err.Error(), "unique_device_name_imei") || strings.Contains(err.Error(), "23505") {
+		// چک کردن ارورهای تکراری بودن مقادیر (Postgres Error Code: 23505)
+		if strings.Contains(err.Error(), "23505") {
 			w.WriteHeader(http.StatusConflict) // 409 Conflict
+
+			// اگر ارور مربوط به کد دستگاه باشه
+			if strings.Contains(err.Error(), "unique_device_code") {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"message": "این کد دستگاه قبلاً ثبت شده است! 🚫",
+				})
+				return
+			}
+
+			// اگر ارور مربوط به ترکیب نام و IMEI باشه
+			if strings.Contains(err.Error(), "unique_device_name_imei") {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"message": "دستگاهی با این ترکیب نام و IMEI قبلاً ثبت شده است! 🚫",
+				})
+				return
+			}
+
+			// اگر ارور یونیک دیگه‌ای بود که پیش‌بینی نکرده بودیم
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"message": "دستگاهی با این ترکیب نام و IMEI قبلاً ثبت شده است! 🚫",
+				"message": "مقدار وارد شده تکراری است! 🚫",
 			})
 			return
 		}
@@ -535,25 +552,23 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 			end_time = $4,
 			phone = $5,
 			address = $6,
-			longitude = $7,
-			latitude = $8,
-			fuse_box = $9,
-			null_connection = $10,
-			fuse_comb = $11,
-			line_balance = $12,
-			unit_earth = $13,
-			ups_battery = $14,
-			distance_from_trans = $15,
-			cable_size = $16,
-			three_phase = $17,
-			materials = $18,
-			description = $19,
-			is_active = $20,
-			voice_note_path = $21,
-			updated_at = $22,
-			alarm = $23,
-			owner_name = $24
-		WHERE id = $25
+			fuse_box = $7,
+			null_connection = $8,
+			fuse_comb = $9,
+			line_balance = $10,
+			unit_earth = $11,
+			ups_battery = $12,
+			distance_from_trans = $13,
+			cable_size = $14,
+			three_phase = $15,
+			materials = $16,
+			description = $17,
+			is_active = $18,
+			updated_at = $19,
+			alarm = $20,
+			owner_name = $21,
+			device_code = $22 
+		WHERE id = $23     
 	`
 
 	result, err := database.DB.Exec(
@@ -564,8 +579,6 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		utils.NullableTime(d.EndTime),
 		d.Phone,
 		d.Address,
-		d.Longitude,
-		d.Latitude,
 		d.FuseBox,
 		d.NullConnection,
 		d.FuseComb,
@@ -578,10 +591,10 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		d.Materials,
 		d.Description,
 		d.IsActive,
-		d.VoiceNotePath,
 		time.Now().Format(time.RFC3339),
 		d.Alarm,
 		d.OwnerName,
+		d.DeviceCode, // 👈 این هم اضافه شد
 		id,
 	)
 
@@ -589,10 +602,18 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// بررسی خطای تکراری در آپدیت
-		if strings.Contains(err.Error(), "unique_imei") || strings.Contains(err.Error(), "23505") {
+		if strings.Contains(err.Error(), "23505") {
 			w.WriteHeader(http.StatusConflict) // کد 409
+
+			if strings.Contains(err.Error(), "unique_device_code") {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"message": "این کد دستگاه قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
+				})
+				return
+			}
+
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"message": "این IMEI قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
+				"message": "این نام یا IMEI قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
 			})
 			return
 		}

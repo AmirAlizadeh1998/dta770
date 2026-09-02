@@ -8,14 +8,13 @@ import {jwtDecode} from "jwt-decode";
 type Device = {
     id: number | string
     device_name: string
+    device_code: string
     owner_name: string
     imei: string
     start_time: string
     end_time: string
     phone: string
     address?: string
-    longitude?: string
-    latitude?: string
     fuse_box?: boolean
     null_connection?: boolean
     fuse_comb?: boolean
@@ -40,13 +39,12 @@ type Device = {
 type DeviceForm = {
     deviceName: string
     ownerName: string
+    deviceCode: string
     imei: string
     startTime: string
     endTime: string
     phone: string
     address: string
-    longitude: string
-    latitude: string
     distanceFromTrans: string
     cableSize: string
     threePhase: boolean
@@ -69,8 +67,8 @@ type DeviceForm = {
 }
 
 const initialForm: DeviceForm = {
-    deviceName: "", ownerName: "", imei: "", startTime: "", endTime: "",
-    phone: "", address: "", longitude: "", latitude: "",
+    deviceName: "", ownerName: "", deviceCode: "", imei: "", startTime: "", endTime: "",
+    phone: "", address: "",
     distanceFromTrans: "", cableSize: "", threePhase: false,
     materials: "", description: "", isActive: false,
     fuseBox: false, nullConnection: false, fuseComb: false,
@@ -154,9 +152,21 @@ export default function DeviceManagePage() {
         const e: Partial<Record<keyof DeviceForm, string>> = {}
         const trimmedName = form.deviceName.trim()
         const trimmedImei = form.imei.trim()
+        const trimmedDeviceCode = form.deviceCode.trim()
 
         if (!trimmedName) e.deviceName = "نام دستگاه اجباری است"
         if (!form.ownerName.trim()) e.ownerName = "نام مالک اجباری است"
+        if (!trimmedDeviceCode) {
+            e.deviceCode = "کد دستگاه اجباری است"
+        } else {
+            const isDeviceCodeDuplicate = devices.some(
+                (d) => d.id !== editingId && d.device_code === trimmedDeviceCode
+            )
+
+            if (isDeviceCodeDuplicate) {
+                e.deviceCode = "این کد دستگاه قبلاً ثبت شده است"
+            }
+        }
 
         if (!trimmedImei) {
             e.imei = "IMEI اجباری است"
@@ -198,7 +208,7 @@ export default function DeviceManagePage() {
             alert("شما مجاز به ویرایش نمی‌باشید! 🚫");
             return;
         }
-        
+
         if (form.startTime && form.endTime) {
             const start = new Date(form.startTime).getTime();
             const end = new Date(form.endTime).getTime();
@@ -231,13 +241,12 @@ export default function DeviceManagePage() {
                 body: JSON.stringify({
                     device_name: form.deviceName,
                     owner_name: form.ownerName,
+                    device_code: form.deviceCode,
                     imei: form.imei,
                     start_time: form.startTime,
                     end_time: form.endTime,
                     phone: form.phone,
                     address: form.address,
-                    longitude: form.longitude,
-                    latitude: form.latitude,
                     fuse_box: form.fuseBox,
                     null_connection: form.nullConnection,
                     fuse_comb: form.fuseComb,
@@ -261,13 +270,20 @@ export default function DeviceManagePage() {
                 console.error(data.message || "خطا در ذخیره اطلاعات")
                 alert(data.message || "خطایی رخ داده است ❌")
 
-                // اگر خطای تکراری بودن (409 Conflict) بود، زیر هر دو فیلد نام دستگاه و IMEI ارور بذار
+                // خطای تکراری بودن (409 Conflict)
                 if (response.status === 409) {
-                    setErrors((prev) => ({
-                        ...prev,
-                        deviceName: "ترکیب این نام و IMEI تکراری است",
-                        imei: "این IMEI با این نام قبلاً ثبت شده است",
-                    }))
+                    if (data.message && data.message.includes("کد دستگاه")) {
+                        setErrors((prev) => ({
+                            ...prev,
+                            deviceCode: "این کد دستگاه قبلاً در دیتابیس ثبت شده است",
+                        }))
+                    } else {
+                        setErrors((prev) => ({
+                            ...prev,
+                            deviceName: "ترکیب این نام و IMEI تکراری است",
+                            imei: "این IMEI با این نام قبلاً ثبت شده است",
+                        }))
+                    }
                 }
 
                 return // 👈 جلوی ادامه عملیات گرفته میشه
@@ -342,12 +358,11 @@ export default function DeviceManagePage() {
             deviceName: device.device_name || "",
             ownerName: device.owner_name || "بدون مالک مشخص",
             imei: device.imei || "",
+            deviceCode: device.device_code || "",
             startTime: device.start_time || "",
             endTime: device.end_time || "",
             phone: device.phone || "",
             address: device.address || "",
-            longitude: device.longitude || "",
-            latitude: device.latitude || "",
             distanceFromTrans: device.distance_from_trans || "",
             cableSize: device.cable_size || "",
             threePhase: device.three_phase || false,
@@ -417,14 +432,13 @@ export default function DeviceManagePage() {
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
                         <h3 className="text-base font-bold text-gray-800 mb-4">مشخصات مشتری</h3>
                         <Field label="نام دستگاه" fieldKey="deviceName" error={errors.deviceName} value={form.deviceName} onChange={handleChange} required />
-                        <Field label="نام مالک" fieldKey="ownerName" error={errors.ownerName} value={form.ownerName} onChange={handleChange} required />
                         <Field label="IMEI" fieldKey="imei" error={errors.imei} value={form.imei} onChange={handleChange} required />
+                        <Field label="کد دستگاه" fieldKey="deviceCode" error={errors.deviceCode} value={form.deviceCode} onChange={handleChange} required />
+                        <Field label="نام مالک" fieldKey="ownerName" error={errors.ownerName} value={form.ownerName} onChange={handleChange} required />
                         <JalaliDatePicker label="زمان شروع" value={form.startTime} onChange={(val) => handleChange("startTime", val)} error={errors.startTime} />
                         <JalaliDatePicker label="زمان پایان" value={form.endTime} onChange={(val) => handleChange("endTime", val)} error={errors.endTime} />
                         <Field label="تلفن" fieldKey="phone" error={errors.phone} value={form.phone} onChange={handleChange} />
                         <Field label="آدرس" fieldKey="address" error={errors.address} value={form.address} onChange={handleChange} />
-                        <Field label="طول جغرافیایی" fieldKey="longitude" error={errors.longitude} value={form.longitude} onChange={handleChange} />
-                        <Field label="عرض جغرافیایی" fieldKey="latitude" error={errors.latitude} value={form.latitude} onChange={handleChange} />
                     </section>
 
                     {/* مشخصات اتصالات */}
@@ -444,7 +458,7 @@ export default function DeviceManagePage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* توضیحات */}
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
-                        <h3 className="text-base font-bold text-gray-800 mb-4">توضیحات</h3>
+                        <h3 className="text-base font-bold text-gray-800 mb-4">سایرط</h3>
                         <div className="flex gap-3 mb-3">
                             <label className="w-24 shrink-0 text-sm text-gray-600 text-left pt-2">توضیحات</label>
                             <textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={4} className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
@@ -453,10 +467,6 @@ export default function DeviceManagePage() {
                             <span className="text-sm text-gray-600">فعال؟</span>
                             <input type="checkbox" checked={form.isActive} onChange={(e) => handleChange("isActive", e.target.checked)} className="w-4 h-4 accent-blue-600" />
                         </label>
-                        <div className="flex items-center gap-3">
-                            <label className="w-24 shrink-0 text-sm text-gray-600 text-left">یادداشت صوتی</label>
-                            <button type="button" className="flex-1 bg-orange-400 hover:bg-orange-500 text-white py-2 rounded-md text-sm transition">🎙️ ضبط صدا</button>
-                        </div>
                     </section>
 
                     {/* تجهیزات */}
@@ -577,8 +587,9 @@ export default function DeviceManagePage() {
                         <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                         <tr>
                             <th scope="col" className="px-6 py-3 border-b">نام دستگاه</th>
-                            <th scope="col" className="px-6 py-3 border-b">نام مالک</th>
                             <th scope="col" className="px-6 py-3 border-b">IMEI</th>
+                            <th scope="col" className="px-6 py-3 border-b">کد دستگاه</th>
+                            <th scope="col" className="px-6 py-3 border-b">نام مالک</th>
                             <th scope="col" className="px-6 py-3 border-b">زمان شروع</th>
                             <th scope="col" className="px-6 py-3 border-b">زمان پایان</th>
                             <th scope="col" className="px-6 py-3 border-b">تلفن</th>
@@ -592,7 +603,7 @@ export default function DeviceManagePage() {
                                     <React.Fragment key={owner}>
                                         {/* سطر جداکننده برای هر مالک */}
                                         <tr className="bg-blue-100 border-b-2 border-blue-200">
-                                            <td colSpan={canEdit ? 8 : 7} className="px-6 py-3 font-bold text-blue-900 text-center">
+                                            <td colSpan={canEdit ? 9 : 8} className="px-6 py-3 font-bold text-blue-900 text-center">
                                                 👤 مالک: {owner} (تعداد دستگاه: {ownerDevices.length})
                                             </td>
                                         </tr>
@@ -601,8 +612,9 @@ export default function DeviceManagePage() {
                                         {ownerDevices.map((device) => (
                                             <tr key={device.id} className={`border-b transition ${editingId === device.id ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
                                                 <td className="px-6 py-4">{device.device_name}</td>
-                                                <td className="px-6 py-4">{device.owner_name}</td>
                                                 <td className="px-6 py-4 font-mono">{device.imei}</td>
+                                                <td className="px-6 py-4 font-mono">{device.device_code}</td>
+                                                <td className="px-6 py-4">{device.owner_name}</td>
                                                 <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.start_time)}</td>
                                                 <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.end_time)}</td>
                                                 <td className="px-6 py-4" dir="ltr">{device.phone}</td>

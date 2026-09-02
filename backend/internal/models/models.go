@@ -26,11 +26,10 @@ type Device struct {
 	Id                int    `json:"id"`
 	DeviceName        string `json:"device_name"`
 	OwnerName         string `json:"owner_name"`
+	DeviceCode        string `json:"device_code"`
 	Imei              string `json:"imei"`
 	Phone             string `json:"phone"`
 	Address           string `json:"address"`
-	Longitude         string `json:"longitude"`
-	Latitude          string `json:"latitude"`
 	FuseBox           bool   `json:"fuse_box"`
 	NullConnection    bool   `json:"null_connection"`
 	FuseComb          bool   `json:"fuse_comb"`
@@ -43,7 +42,6 @@ type Device struct {
 	Materials         string `json:"materials"`
 	Description       string `json:"description"`
 	IsActive          bool   `json:"is_active"`
-	VoiceNotePath     string `json:"voice_note_path"`
 	StartTime         string `json:"start_time"`
 	EndTime           string `json:"end_time"`
 	LastSeenAt        string `json:"last_seen_at"`
