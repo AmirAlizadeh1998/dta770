@@ -227,19 +227,20 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		SELECT 
 			d.id, 
 			d.device_name, 
+			d.device_code AS customer_id,
 			d.owner_name, 
 			d.imei,
 			d.end_time,
 			l.created_at AS last_seen_at,
-			l.data->>'customer_id' AS customer_id,
-			l.data->>'acin' AS acin  -- ✨ این خط اضافه شد
+			l.data->>'acin' AS acin
 		FROM 
 			devices d
 		JOIN LATERAL (
 			SELECT created_at, data 
 			FROM device_logs 
-			WHERE imei = d.imei 
-			  AND data ? 'customer_id' 
+			-- ✨ تغییر اصلی اینجاست: مچ کردن با استفاده از device_code و customer_id
+			WHERE data->>'customer_id' = d.device_code::text
+			  AND NULLIF(BTRIM(d.device_code::text), '') IS NOT NULL
 			ORDER BY created_at DESC 
 			LIMIT 1
 		) l ON true
@@ -260,7 +261,7 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		EndTime      string    `json:"end_time"`
 		LastSeenAt   time.Time `json:"last_seen_at"`
 		CustomerName string    `json:"device_name"`
-		Acin         string    `json:"acin"` // ✨ این فیلد اضافه شد
+		Acin         string    `json:"acin"`
 	}
 
 	var devices []ActiveDevice
@@ -271,10 +272,18 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		var customerName sql.NullString
 		var endTime sql.NullTime
 		var ownerName sql.NullString
-		var acin sql.NullString // ✨ متغیر کمکی برای acin
+		var acin sql.NullString
 
-		// ✨ متغیر acin به Scan اضافه شد (ترتیب باید دقیقاً مثل SELECT باشه)
-		err := rows.Scan(&d.ID, &customerName, &ownerName, &d.IMEI, &endTime, &d.LastSeenAt, &customerID, &acin)
+		err := rows.Scan(
+			&d.ID,
+			&customerName,
+			&customerID,
+			&ownerName,
+			&d.IMEI,
+			&endTime,
+			&d.LastSeenAt,
+			&acin,
+		)
 		if err != nil {
 			log.Printf("scan device error: %v", err)
 			continue
@@ -302,11 +311,10 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 			d.EndTime = ""
 		}
 
-		// ✨ مقداردهی acin
 		if acin.Valid && acin.String != "" {
 			d.Acin = acin.String
 		} else {
-			d.Acin = "0" // مقدار پیش‌فرض اگه وجود نداشت
+			d.Acin = "0"
 		}
 
 		devices = append(devices, d)

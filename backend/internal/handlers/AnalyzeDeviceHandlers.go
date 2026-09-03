@@ -15,7 +15,8 @@ import (
 func AnalyzeDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	imei := q.Get("imei")
+	//imei := q.Get("imei")
+	deviceCode := q.Get("device_code")
 	startDate := q.Get("start_date")
 	endDate := q.Get("end_date")
 	parameter := q.Get("parameter")
@@ -40,14 +41,15 @@ func AnalyzeDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 	paramCount := 1
 
-	// فیلتر IMEI
-	if imei != "" {
-		conditions = append(conditions, fmt.Sprintf("imei = $%d", paramCount))
-		args = append(args, imei)
+	// فیلتر بر اساس device_code (منطق جدید)
+	if deviceCode != "" {
+		// این کوئری روی فیلد customer_id داخل ستون data که از نوع JSONB هست، فیلتر می‌کنه
+		conditions = append(conditions, fmt.Sprintf("(data->>'customer_id') = $%d", paramCount))
+		args = append(args, deviceCode)
 		paramCount++
 	}
 
-	// فیلتر تاریخ
+	// فیلتر تاریخ (بدون تغییر)
 	if startDate != "" {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", paramCount))
 		args = append(args, startDate)

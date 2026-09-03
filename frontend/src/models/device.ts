@@ -1,6 +1,7 @@
 export interface Device {
     id: number;
     imei: string;
+    device_code: string;
     device_name: string;
     start_time: string;
     end_time: string;

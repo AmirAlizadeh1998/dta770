@@ -35,15 +35,6 @@ const menuItems = [
         ],
     },
     {
-        label: "کاربران",
-        icon: <MdPeople className="text-xl"/>,
-        roles: [UserRole.ADMIN],
-        children: [
-            { label: "لیست کاربران", view: "users-list", roles: [UserRole.ADMIN] },
-            { label: "نقش‌ها و دسترسی‌ها", view: "users-roles", roles: [UserRole.ADMIN] },
-        ],
-    },
-    {
         label: "گزارشات",
         icon: <MdAssessment className="text-xl"/>,
         roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER],
@@ -52,6 +43,15 @@ const menuItems = [
             { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
             { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
             { label: "تحلیل با هوش مصنوعی", view: "analyze-ai", roles: [UserRole.ADMIN] },
+        ],
+    },
+    {
+        label: "کاربران",
+        icon: <MdPeople className="text-xl"/>,
+        roles: [UserRole.ADMIN],
+        children: [
+            { label: "لیست کاربران", view: "users-list", roles: [UserRole.ADMIN] },
+            { label: "نقش‌ها و دسترسی‌ها", view: "users-roles", roles: [UserRole.ADMIN] },
         ],
     },
     {

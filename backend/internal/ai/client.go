@@ -22,7 +22,7 @@ func GenerateReportStream(
 
 	// ایجاد استریم رکوئست با مدل و پرامپت‌های اختصاصی خودت
 	stream := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
-		Model: "claude-fable-5",
+		Model: "gemini-2.5-flash",
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(SystemPrompt),
 			openai.UserMessage(userMessage),

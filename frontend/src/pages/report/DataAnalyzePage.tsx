@@ -149,7 +149,7 @@ const DataAnalyzePage: React.FC = () => {
 
         try {
             const queryParamsObject: Record<string, string> = {
-                imei: selectedDevice,
+                device_code: selectedDevice,
                 parameter: selectedParameter,
                 operator: operator,
                 start_date: startDate,
@@ -237,7 +237,8 @@ const DataAnalyzePage: React.FC = () => {
 
     // 👈 تبدیل دیتاهای دستگاه‌ها به فرمت react-select
     const deviceOptions = devices.map(device => ({
-        value: device.imei,
+        // فرض می‌کنیم فیلدی به اسم device_code در مدل Device وجود داره
+        value: device.device_code, // <--- تغییر اصلی اینجاست
         label: `${device.device_name ? device.device_name : ''} (${device.imei})`
     }));
 

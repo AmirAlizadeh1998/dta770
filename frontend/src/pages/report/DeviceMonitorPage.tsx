@@ -22,7 +22,6 @@ interface DeviceMonitorProps {
     initialDevice?: DeviceMonitorSelection | null;
 }
 
-// تایپ آپشن‌های Select برای تایپ سیف بودن کامل
 interface DeviceOption {
     value: string;
     label: string;
@@ -31,36 +30,35 @@ interface DeviceOption {
     originalData: Device;
 }
 
+// 💡 تغییر ۱: یک استیت کاستوم برای دستگاه انتخاب شده می‌سازیم تا تاریخ‌ها رو هم تو خودش نگه داره
+interface SelectedDeviceState {
+    deviceName: string;
+    imei: string;
+    startTime?: string;
+    endTime?: string;
+}
+
 const getDeviceKey = (deviceName: string, imei: string) =>
     `${deviceName}-${imei}`;
 
 const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) => {
     const getDeviceStatus = (): 'unknown' | 'offline' | 'online' => {
         const data = deviceDetails?.data;
-
-        // ۱. اگر دیتا کلا نیومده بود (null یا undefined)
         if (!data) return 'unknown';
-
-        // ۲. اگر بک‌اند آبجکت یا آرایه خالی فرستاده بود {} یا []
         if (typeof data === 'object' && Object.keys(data).length === 0) return 'unknown';
-
-        // ۳. اگر بک‌اند Go استراکت رو با مقادیر پیش‌فرض (خالی) فرستاده باشه
-        // مثلا چک می‌کنیم اگر مدل، کد و ... خالی بود و آفلاین هم نبود، یعنی دیتای مفیدی نداریم
         if (!data.model && !data.customer_id && !data.work_clock && data.IMEI !== "offline") {
             return 'unknown';
         }
-
-        // ۴. بررسی حالت آفلاین
         if (data.IMEI === "offline") {
             return 'offline';
         }
-
-        // ۵. اگر هیچکدوم از بالا نبود، پس دستگاه واقعا روشنه و دیتا داره
         return 'online';
     };
 
     const [devices, setDevices] = useState<Device[]>([]);
-    const [selectedDevice, setSelectedDevice] = useState<DeviceMonitorSelection | null>(null);
+
+    // 💡 تغییر ۲: استفاده از اینترفیس جدید برای استیت
+    const [selectedDevice, setSelectedDevice] = useState<SelectedDeviceState | null>(null);
     const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsResponse | null>(null);
     const [activeTab, setActiveTab] = useState('basic');
     const token = localStorage.getItem("token");
@@ -68,7 +66,6 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
     const deviceStatus = getDeviceStatus();
     const isMissionEnded = !!(deviceDetails?.end_time && new Date(deviceDetails.end_time) < new Date());
 
-    // مقدار گزینه، ترکیب نام دستگاه و IMEI است تا جستجو و انتخاب بر اساس همین شناسه انجام شود.
     const options: DeviceOption[] = devices.map((device) => ({
         value: getDeviceKey(device.device_name, device.imei),
         label: `${device.device_name} - ${device.imei}`,
@@ -113,20 +110,32 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
 
         if (deviceToSelect) {
             setDeviceDetails(null);
+            // 💡 تغییر ۳: گرفتن تاریخ‌ها از دیتای اولیه
             setSelectedDevice({
                 deviceName: deviceToSelect.device_name,
-                imei: deviceToSelect.imei
+                imei: deviceToSelect.imei,
+                startTime: (deviceToSelect as any).start_time,
+                endTime: (deviceToSelect as any).end_time
             });
         }
     }, [initialDevice, initialImei, devices]);
 
-    // دریافت جزئیات دستگاه با ترکیب نام و IMEI
-    const fetchDeviceDetails = async (deviceName: string, imei: string) => {
+    // 💡 تغییر ۴: اضافه شدن پارامترهای تاریخ به تابع
+    const fetchDeviceDetails = async (deviceName: string, imei: string, startTime?: string, endTime?: string) => {
         try {
             const queryParams = new URLSearchParams({
                 device_name: deviceName,
                 imei: imei
             });
+
+            // اضافه کردن تاریخ‌ها با فرمت ISO
+            if (startTime) {
+                queryParams.append("start_time", new Date(startTime).toISOString());
+            }
+            if (endTime) {
+                queryParams.append("end_time", new Date(endTime).toISOString());
+            }
+
             const response = await fetch(`/api/monitor/devices?${queryParams.toString()}`, {
                 method: "GET",
                 headers: { "Authorization": `Bearer ${token}` }
@@ -135,7 +144,6 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
             const data = await response.json();
             setDeviceDetails({
                 ...data,
-                // برای سازگاری با پاسخ‌های قدیمی، نام انتخاب‌شده را نگه می‌داریم.
                 device_name: data.device_name || deviceName
             });
         } catch (error) {
@@ -150,18 +158,33 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
             return;
         }
         setDeviceDetails(null);
+        // 💡 تغییر ۵: ذخیره تاریخ‌ها موقع انتخاب دستگاه از دراپ‌داون
         setSelectedDevice({
             deviceName: selectedOption.deviceName,
-            imei: selectedOption.imei
+            imei: selectedOption.imei,
+            startTime: (selectedOption.originalData as any).start_time,
+            endTime: (selectedOption.originalData as any).end_time
         });
     };
 
     useEffect(() => {
         if (!selectedDevice) return;
 
-        fetchDeviceDetails(selectedDevice.deviceName, selectedDevice.imei);
+        // 💡 تغییر ۶: پاس دادن تاریخ‌ها به تابع fetch
+        fetchDeviceDetails(
+            selectedDevice.deviceName,
+            selectedDevice.imei,
+            selectedDevice.startTime,
+            selectedDevice.endTime
+        );
+
         const intervalId = setInterval(() => {
-            fetchDeviceDetails(selectedDevice.deviceName, selectedDevice.imei);
+            fetchDeviceDetails(
+                selectedDevice.deviceName,
+                selectedDevice.imei,
+                selectedDevice.startTime,
+                selectedDevice.endTime
+            );
         }, 30000);
 
         return () => clearInterval(intervalId);
@@ -176,6 +199,7 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
             fontFamily: 'IRANSans, Tahoma, sans-serif',
             boxSizing: 'border-box'
         }}>
+            {/* استایل‌ها و بقیه کدهای UI دقیقاً مثل قبل... */}
             <style>{`
                 .tabs-container {
                     display: flex;
@@ -206,7 +230,6 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
                 }
             `}</style>
 
-            {/* بخش انتخاب دستگاه */}
             <div style={{ marginBottom: '20px', direction: 'rtl' }}>
                 <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#333', fontSize: '15px' }}>
                     دستگاه مورد نظر رو انتخاب کن:
@@ -216,12 +239,12 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
                     value={
                         selectedDevice
                             ? options.find(
-                                (opt) =>
-                                    opt.value === getDeviceKey(
-                                        selectedDevice.deviceName,
-                                        selectedDevice.imei
-                                    )
-                            ) || null
+                            (opt) =>
+                                opt.value === getDeviceKey(
+                                    selectedDevice.deviceName,
+                                    selectedDevice.imei
+                                )
+                        ) || null
                             : null
                     }
                     getOptionLabel={(option) => option.label}
@@ -293,6 +316,9 @@ const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) =
                         <ChartDashboard
                             imei={deviceDetails.imei}
                             deviceName={selectedDevice?.deviceName || deviceDetails.device_name || ''}
+                            // 💡 احتمالاً قدم بعدی‌مون اینه که تاریخ‌ها رو به این چارت‌ها هم پاس بدیم!
+                            // startTime={deviceDetails.start_time}
+                            // endTime={deviceDetails.end_time}
                         />
                     </div>
 

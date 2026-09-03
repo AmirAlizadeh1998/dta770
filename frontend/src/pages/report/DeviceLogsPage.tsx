@@ -14,6 +14,17 @@ interface DeviceLog {
     data: Record<string, any>;
 }
 
+interface ExportDeviceOption {
+    value: string;
+    label: string;
+    deviceName: string;
+    imei: string;
+    originalData: Device;
+}
+
+const getExportDeviceKey = (deviceName: string, imei: string) =>
+    `${deviceName}\u0000${imei}`;
+
 const LogsTable = () => {
     const token = localStorage.getItem("token");
     const [logs, setLogs] = useState<DeviceLog[]>([]);
@@ -37,9 +48,12 @@ const LogsTable = () => {
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     // فیلترهای مخصوص اکسل
-    const options = devices.map((device) => ({
-        value: device.imei,
+    const options: ExportDeviceOption[] = devices.map((device) => ({
+        // IMEI alone is not unique, so keep the complete selection identity.
+        value: getExportDeviceKey(device.device_name, device.imei),
         label: `${device.device_name} - ${device.imei}`,
+        deviceName: device.device_name,
+        imei: device.imei,
         originalData: device
     }));
 
@@ -51,7 +65,8 @@ const LogsTable = () => {
     ];
 
     const [exportLimit, setExportLimit] = useState(100);
-    const [exportImei, setExportImei] = useState('')
+    const [exportDeviceName, setExportDeviceName] = useState('');
+    const [exportImei, setExportImei] = useState('');
     const [exportStartDate, setExportStartDate] = useState('');
     const [exportEndDate, setExportEndDate] = useState('');
 
@@ -142,7 +157,10 @@ const LogsTable = () => {
         try {
             // ۱. پارامترها رو آماده می‌کنیم
             const params = new URLSearchParams();
-            if (exportImei) params.append("imei", exportImei);
+            if (exportImei) {
+                params.append("device_name", exportDeviceName);
+                params.append("imei", exportImei);
+            }
             if (exportLimit > 0) params.append("limit", exportLimit.toString()); // عدد ۰ یعنی لیمیت نداریم
             if (exportStartDate) params.append("startDate", toEnglishDigits(exportStartDate));
             if (exportEndDate) params.append("endDate", toEnglishDigits(exportEndDate));
@@ -396,10 +414,12 @@ const LogsTable = () => {
 
     const handleDeviceChange = (selectedOption: any) => {
         if (!selectedOption) {
+            setExportDeviceName('');
             setExportImei('');
             return;
         }
-        setExportImei(selectedOption.value);
+        setExportDeviceName(selectedOption.deviceName);
+        setExportImei(selectedOption.imei);
     };
 
     if (loading && logs.length === 0) return <div className="text-center p-5">در حال بارگذاری... ⏳</div>;
@@ -558,7 +578,10 @@ const LogsTable = () => {
                             <div>
                                 <Select
                                     options={options}
-                                    value={options.find(option => option.value === exportImei) || null}
+                                    value={options.find(option =>
+                                        option.deviceName === exportDeviceName &&
+                                        option.imei === exportImei
+                                    ) || null}
                                     onChange={handleDeviceChange}
                                     isRtl={true}
                                     isSearchable={true}

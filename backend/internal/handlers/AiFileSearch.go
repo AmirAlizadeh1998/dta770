@@ -84,6 +84,16 @@ func AiFileSearchHandler(client *openai.Client) http.HandlerFunc {
 		req := analysis.BuildAIRequest(records)
 
 		// ═══════════════════════════════════════════════════════
+		// لاگ کردن دیتای خلاصه شده ارسالی به AI در کنسول
+		// ═══════════════════════════════════════════════════════
+		reqJSON, err := json.MarshalIndent(req, "", "  ")
+		if err != nil {
+			log.Printf("[AI-Payload] Error marshaling AIRequest: %v\n", err)
+		} else {
+			log.Printf("\n========== [AI REQUEST PAYLOAD START] ==========\n%s\n========== [AI REQUEST PAYLOAD END] ===========\n", string(reqJSON))
+		}
+
+		// ═══════════════════════════════════════════════════════
 		// تا اینجا همه چیز JSON error بود
 		// از اینجا به بعد SSE شروع میشه
 		// ═══════════════════════════════════════════════════════

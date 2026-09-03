@@ -29,11 +29,14 @@ export const DeviceCard = ({ device, onViewMonitor }: DeviceProps) => {
     // چک کردن اینکه آیا زمان الان از end_time رد شده یا نه
     const isOffline = device.end_time && !isNaN(new Date(device.end_time).getTime())
         ? new Date() > new Date(device.end_time)
-        : false
+        : false;
+
+    // بررسی وضعیت برق (فرض بر این است که "1" یعنی وصل و "0" یا مقادیر دیگر یعنی قطع)
+    const isPowerOn = device.acin === "1";
+
     return (
         <div className="bg-white p-5 rounded-2xl shadow-sm border hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-4">
-
                 {/* بخش وضعیت آنلاین / آفلاین */}
                 {isOffline ? (
                     <div className="flex items-center gap-2">
@@ -57,7 +60,28 @@ export const DeviceCard = ({ device, onViewMonitor }: DeviceProps) => {
 
             <h3 className="text-lg font-bold text-gray-800 mb-1">{device.device_name}</h3>
             <p className="text-gray-500 text-sm mb-2">آخرین فعالیت: {lastSeen}</p>
-            <p className="text-gray-500 text-sm mb-4">کد دستگاه: {device.customer_id || "نامشخص"}</p>
+
+            {/* بخش کد دستگاه و وضعیت برق */}
+            <div className="flex justify-between items-center mb-4">
+                <p className="text-gray-500 text-sm">کد دستگاه: {device.customer_id || "نامشخص"}</p>
+
+                {/* نشانگر وضعیت برق */}
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${
+                    isPowerOn ? "bg-amber-100 text-amber-600" : "bg-gray-100 text-gray-500"
+                }`}>
+                    {isPowerOn ? (
+                        <>
+                            <span>⚡</span>
+                            <span>برق وصل</span>
+                        </>
+                    ) : (
+                        <>
+                            <span>🔌</span>
+                            <span>برق قطع</span>
+                        </>
+                    )}
+                </div>
+            </div>
 
             <button
                 onClick={() => onViewMonitor?.({
