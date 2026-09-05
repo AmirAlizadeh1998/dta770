@@ -388,7 +388,9 @@ const DataAnalyzePage: React.FC = () => {
                                     <td className="p-4 text-gray-800">{row.deviceId}</td>
                                     <td className="p-4 text-gray-600" dir="ltr">{row.time}</td>
                                     <td className="p-4 text-gray-600 font-mono text-sm">{row.parameter}</td>
-                                    <td className="p-4 font-semibold text-gray-800">{row.value}</td>
+                                    <td className="p-4 font-semibold text-gray-800 text-right" dir="ltr">
+                                        <span className="inline-block text-left">{row.value}</span>
+                                    </td>
                                 </tr>
                             ))
                         ) : (

@@ -136,6 +136,7 @@ func DeviceMonitorDetailHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetDeviceLogDetailsHandler returns the latest valid log for the selected device.
+// GetDeviceLogDetailsHandler returns the latest valid log for the selected device.
 func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	deviceIMEI := strings.TrimSpace(r.URL.Query().Get("imei"))
 	deviceName := strings.TrimSpace(r.URL.Query().Get("device_name"))
@@ -148,30 +149,24 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var deviceCode sql.NullString
-	var startTime, endTime sql.NullTime
+	var startTime, endTime, deactivatedAt sql.NullTime // 💡 تغییر ۱: deactivatedAt اضافه شد
 	var alarmData []byte
 
 	var query string
 	var args []any
 
-	// 💡 تغییر اصلی اینجاست
 	if reqStartTime != "" && reqEndTime != "" {
-		// به جای پیدا کردن ماموریت "همپوشان"، مستقیم می‌ریم سراغ ماموریتی که
-		// start_time اون با تاریخ ارسالی از فرانت‌اند مطابقت داره.
-		// این کار باگ انتخاب شدن ماموریت جدیدتر رو حل می‌کنه.
 		query = `
-			SELECT device_code, start_time, end_time, alarm
+			SELECT device_code, start_time, end_time, alarm, deactivated_at -- 💡 تغییر ۲: فیلد جدید به کوئری اضافه شد
 			FROM devices
 			WHERE device_name = $1 AND imei = $2
 			ORDER BY abs(extract(epoch from (start_time - $3::timestamptz)))
 			LIMIT 1
 		`
-		// برای پیدا کردن ماموریت منحصر به فرد، فقط به تاریخ شروع نیاز داریم.
 		args = []any{deviceName, deviceIMEI, reqStartTime}
 	} else {
-		// این قسمت برای زمانیه که فرانت‌اند تاریخ نفرسته (رفتار قبلی)
 		query = `
-			SELECT device_code, start_time, end_time, alarm
+			SELECT device_code, start_time, end_time, alarm, deactivated_at -- 💡 تغییر ۳: فیلد جدید به این کوئری هم اضافه شد
 			FROM devices
 			WHERE device_name = $1 AND imei = $2
 			ORDER BY id DESC
@@ -180,7 +175,8 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		args = []any{deviceName, deviceIMEI}
 	}
 
-	err := database.DB.QueryRow(query, args...).Scan(&deviceCode, &startTime, &endTime, &alarmData)
+	// 💡 تغییر ۴: اسکن کردن مقدار deactivated_at
+	err := database.DB.QueryRow(query, args...).Scan(&deviceCode, &startTime, &endTime, &alarmData, &deactivatedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		writeErrorJSON(w, http.StatusNotFound, "دستگاهی با این مشخصات (نام و IMEI و تاریخ) پیدا نشد")
@@ -192,17 +188,22 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// بقیه کد بدون تغییر باقی می‌مونه چون منطقش درسته...
-	// ... وقتی startTime و endTime درست از دیتابیس خونده بشن، لاگ‌ها هم درست فیلتر میشن.
-
 	deviceCodeValue := strings.TrimSpace(deviceCode.String)
 	if !deviceCode.Valid || deviceCodeValue == "" {
 		writeErrorJSON(w, http.StatusBadRequest, "کد دستگاه برای این دستگاه تنظیم نشده است")
 		return
 	}
 
+	// 💡💡💡 تغییر ۵ (قلب ماجرا): تعیین تاریخ پایان نهایی برای کوئری لاگ‌ها
+	var finalEndTime sql.NullTime
+	if deactivatedAt.Valid {
+		finalEndTime = deactivatedAt // اگه تاریخ غیرفعالی داشت، از اون استفاده کن
+	} else {
+		finalEndTime = endTime // وگرنه، از تاریخ پایان ماموریت استفاده کن
+	}
+
 	startTimeParam := nullTimeValue(startTime)
-	endTimeParam := nullTimeValue(endTime)
+	endTimeParam := nullTimeValue(finalEndTime) // <--- اینجا از متغیر جدید استفاده می‌کنیم
 	var validLogData []byte
 	var lastValidDataTime sql.NullTime
 
@@ -212,7 +213,7 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		WHERE data->>'customer_id' = $1
 		  AND data ? 'model'
 		  AND ($2::timestamptz IS NULL OR created_at >= $2)
-		  AND ($3::timestamptz IS NULL OR created_at <= $3)
+		  AND ($3::timestamptz IS NULL OR created_at <= $3) -- <--- این شرط حالا هوشمندانه عمل می‌کنه
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, deviceCodeValue, startTimeParam, endTimeParam).Scan(&validLogData, &lastValidDataTime)
@@ -274,6 +275,10 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if lastValidDataTime.Valid {
 		response.LastValidDataTime = &lastValidDataTime.Time
+	}
+	// 💡 تغییر ۶: پر کردن فیلد جدید در پاسخ نهایی
+	if deactivatedAt.Valid {
+		response.DeactivatedAt = &deactivatedAt.Time
 	}
 
 	writeJSON(w, response)

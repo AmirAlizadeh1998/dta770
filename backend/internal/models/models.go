@@ -42,6 +42,7 @@ type Device struct {
 	Materials         string `json:"materials"`
 	Description       string `json:"description"`
 	IsActive          bool   `json:"is_active"`
+	DeactivatedAt     string `json:"deactivated_at,omitempty"`
 	StartTime         string `json:"start_time"`
 	EndTime           string `json:"end_time"`
 	LastSeenAt        string `json:"last_seen_at"`
@@ -242,4 +243,5 @@ type DeviceDetailsResponse struct {
 	EndTime           *time.Time        `json:"end_time"`
 	LastValidDataTime *time.Time        `json:"last_valid_data_time"`
 	Alarm             json.RawMessage   `json:"alarm,omitempty"`
+	DeactivatedAt     *time.Time        `json:"deactivated_at,omitempty"`
 }

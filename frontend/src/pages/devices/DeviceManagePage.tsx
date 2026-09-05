@@ -70,7 +70,7 @@ const initialForm: DeviceForm = {
     deviceName: "", ownerName: "", deviceCode: "", imei: "", startTime: "", endTime: "",
     phone: "", address: "",
     distanceFromTrans: "", cableSize: "", threePhase: false,
-    materials: "", description: "", isActive: false,
+    materials: "", description: "", isActive: true,
     fuseBox: false, nullConnection: false, fuseComb: false,
     lineBalance: false, unitEarth: false, upsBattery: false,
     lineToLineUpper: "", lineToLineLower: "",
@@ -458,7 +458,7 @@ export default function DeviceManagePage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* توضیحات */}
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
-                        <h3 className="text-base font-bold text-gray-800 mb-4">سایرط</h3>
+                        <h3 className="text-base font-bold text-gray-800 mb-4">سایر</h3>
                         <div className="flex gap-3 mb-3">
                             <label className="w-24 shrink-0 text-sm text-gray-600 text-left pt-2">توضیحات</label>
                             <textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={4} className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />

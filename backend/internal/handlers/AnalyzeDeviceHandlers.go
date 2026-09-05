@@ -42,10 +42,38 @@ func AnalyzeDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	paramCount := 1
 
 	// فیلتر بر اساس device_code (منطق جدید)
+	// فیلتر بر اساس device_code (منطق جدید)
 	if deviceCode != "" {
 		// این کوئری روی فیلد customer_id داخل ستون data که از نوع JSONB هست، فیلتر می‌کنه
 		conditions = append(conditions, fmt.Sprintf("(data->>'customer_id') = $%d", paramCount))
 		args = append(args, deviceCode)
+		paramCount++
+
+		// 👇---- منطق جدید: محدود کردن لاگ‌ها تا زمان غیرفعال شدن دستگاه ----👇
+		var deactivatedAt sql.NullTime // اگر تو دیتابیس نوعش استرینگ هست از sql.NullString استفاده کن
+
+		// واکشی تاریخ غیرفعال شدن از جدول دستگاه‌ها
+		// (فرض بر این است که ستون device_code در جدول devices وجود دارد)
+		err := database.DB.QueryRow(`SELECT deactivated_at FROM devices WHERE device_code = $1`, deviceCode).Scan(&deactivatedAt)
+
+		if err == nil && deactivatedAt.Valid {
+			// اضافه کردن شرط سقف زمانی: تاریخ لاگ باید حتما قبل از زمان خاموشی دستگاه باشه
+			conditions = append(conditions, fmt.Sprintf("created_at <= $%d", paramCount))
+			args = append(args, deactivatedAt.Time)
+			paramCount++
+		}
+		// 👆------------------------------------------------------------------👆
+	}
+
+	// فیلتر تاریخ (بدون تغییر می‌مونه)
+	if startDate != "" {
+		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", paramCount))
+		args = append(args, startDate)
+		paramCount++
+	}
+	if endDate != "" {
+		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", paramCount))
+		args = append(args, endDate)
 		paramCount++
 	}
 

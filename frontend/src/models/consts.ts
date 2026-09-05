@@ -184,7 +184,7 @@ export const FRQ_CARDS = [
         ]
     },
     {
-        title: 'هارمونیک های جریان فاز R',
+        title: 'هارمونیک های ولتاژ فاز R',
         unit: '%',
         items: [
             {label: 'هارمونیک اول فاز R', key: 'harmonic_1_R'},
@@ -205,7 +205,7 @@ export const FRQ_CARDS = [
         ]
     },
     {
-        title: 'هارمونیک های جریان فاز S',
+        title: 'هارمونیک های ولتاژ فاز S',
         unit: '%',
         items: [
             {label: 'هارمونیک اول فاز S', key: 'harmonic_1_S'},
@@ -226,7 +226,7 @@ export const FRQ_CARDS = [
         ]
     },
     {
-        title: 'هارمونیک های جریان فاز T',
+        title: 'هارمونیک های ولتاژ فاز T',
         unit: '%',
         items: [
             {label: 'هارمونیک اول فاز T', key: 'harmonic_1_T'},

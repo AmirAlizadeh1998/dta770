@@ -361,7 +361,7 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 			id, device_name, device_code, owner_name, imei, phone, address,
 			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 			distance_from_trans, cable_size, three_phase, materials,
-			description, is_active, start_time, end_time, alarm
+			description, is_active, start_time, end_time, alarm, deactivated_at
 		FROM devices
 		ORDER BY id DESC
 	`)
@@ -376,7 +376,7 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var d models.Device
-		var startTime, endTime sql.NullTime
+		var startTime, endTime, deactivatedAt sql.NullTime
 		var alarm, deviceCode sql.NullString
 
 		err := rows.Scan(
@@ -402,6 +402,7 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 			&startTime,
 			&endTime,
 			&alarm,
+			&deactivatedAt,
 		)
 
 		if err != nil {
@@ -418,13 +419,16 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 			d.EndTime = endTime.Time.Format(time.RFC3339)
 		}
 
-		// ۳. اگر آلارم نال نبود، مقدارش رو می‌ریزیم تو دستگاه
 		if alarm.Valid {
 			d.Alarm = alarm.String
 		}
 
 		if deviceCode.Valid {
 			d.DeviceCode = deviceCode.String
+		}
+
+		if deactivatedAt.Valid {
+			d.DeactivatedAt = deactivatedAt.Time.Format(time.RFC3339)
 		}
 
 		devices = append(devices, d)
@@ -464,12 +468,13 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 			device_name, owner_name, imei, start_time, end_time, phone, address,
 			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 			distance_from_trans, cable_size, three_phase, materials,
-			description, is_active, device_code
+			description, is_active, device_code, deactivated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8,
 			$9, $10, $11, $12, $13, $14,
 			$15, $16, $17, $18,
-			$19, $20
+			$19, $20, 
+            CASE WHEN $19 = false THEN CURRENT_TIMESTAMP ELSE NULL END
 		)
 		RETURNING id
 	`
@@ -572,6 +577,11 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 			materials = $16,
 			description = $17,
 			is_active = $18,
+			deactivated_at = CASE 
+				WHEN is_active = true AND $18 = false THEN CURRENT_TIMESTAMP -- تازه تیکش برداشته شده
+				WHEN $18 = true THEN NULL -- دوباره تیک خورده و فعال شده
+				ELSE deactivated_at -- تغییری نکرده، همون تاریخ قبلی بمونه
+			END,
 			updated_at = $19,
 			alarm = $20,
 			owner_name = $21,
