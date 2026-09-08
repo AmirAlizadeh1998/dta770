@@ -44,14 +44,34 @@ const getDeviceKey = (deviceName: string, imei: string) =>
 const DeviceMonitorPage = ({ initialImei, initialDevice }: DeviceMonitorProps) => {
     const getDeviceStatus = (): 'unknown' | 'offline' | 'online' => {
         const data = deviceDetails?.data;
-        if (!data) return 'unknown';
-        if (typeof data === 'object' && Object.keys(data).length === 0) return 'unknown';
+        if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+            return 'unknown';
+        }
+
+        // اگر دیتای لاگ اصلاً اطلاعات حیاتی مرتبط با customer_id نداشت
         if (!data.model && !data.customer_id && !data.work_clock && data.IMEI !== "offline") {
             return 'unknown';
         }
+
+        // اگر صراحتاً فلگ آفلاین ست شده بود
         if (data.IMEI === "offline") {
             return 'offline';
         }
+
+        // ⏱️ محاسبه بر اساس زمان آخرین لاگ معتبر
+        const timestampToCheck = deviceDetails?.last_valid_data_time || deviceDetails?.created_at;
+        if (timestampToCheck) {
+            const lastLogTime = new Date(timestampToCheck).getTime();
+            const now = new Date().getTime();
+            const diffMinutes = (now - lastLogTime) / (1000 * 60);
+
+            if (diffMinutes > 5) {
+                return 'offline';
+            }
+        } else {
+            return 'offline';
+        }
+
         return 'online';
     };
 

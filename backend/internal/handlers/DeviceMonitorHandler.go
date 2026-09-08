@@ -136,28 +136,30 @@ func DeviceMonitorDetailHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetDeviceLogDetailsHandler returns the latest valid log for the selected device.
-// GetDeviceLogDetailsHandler returns the latest valid log for the selected device.
 func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	deviceIMEI := strings.TrimSpace(r.URL.Query().Get("imei"))
 	deviceName := strings.TrimSpace(r.URL.Query().Get("device_name"))
 	reqStartTime := strings.TrimSpace(r.URL.Query().Get("start_time"))
-	reqEndTime := strings.TrimSpace(r.URL.Query().Get("end_time")) // We keep reading this for validation
+	reqEndTime := strings.TrimSpace(r.URL.Query().Get("end_time"))
 
 	if deviceIMEI == "" || deviceName == "" {
 		writeErrorJSON(w, http.StatusBadRequest, "هر دو پارامتر device_name و imei الزامی هستند")
 		return
 	}
 
-	var deviceCode sql.NullString
-	var startTime, endTime, deactivatedAt sql.NullTime // 💡 تغییر ۱: deactivatedAt اضافه شد
-	var alarmData []byte
+	var (
+		deviceCode         sql.NullString
+		startTime, endTime sql.NullTime
+		deactivatedAt      sql.NullTime
+		alarmData          []byte
+		query              string
+		args               []any
+	)
 
-	var query string
-	var args []any
-
+	// انتخاب رکورد متناسب با بازه زمانی یا آخرین رکورد فعال دستگاه
 	if reqStartTime != "" && reqEndTime != "" {
 		query = `
-			SELECT device_code, start_time, end_time, alarm, deactivated_at -- 💡 تغییر ۲: فیلد جدید به کوئری اضافه شد
+			SELECT device_code, start_time, end_time, alarm, deactivated_at
 			FROM devices
 			WHERE device_name = $1 AND imei = $2
 			ORDER BY abs(extract(epoch from (start_time - $3::timestamptz)))
@@ -166,7 +168,7 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		args = []any{deviceName, deviceIMEI, reqStartTime}
 	} else {
 		query = `
-			SELECT device_code, start_time, end_time, alarm, deactivated_at -- 💡 تغییر ۳: فیلد جدید به این کوئری هم اضافه شد
+			SELECT device_code, start_time, end_time, alarm, deactivated_at
 			FROM devices
 			WHERE device_name = $1 AND imei = $2
 			ORDER BY id DESC
@@ -175,11 +177,16 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		args = []any{deviceName, deviceIMEI}
 	}
 
-	// 💡 تغییر ۴: اسکن کردن مقدار deactivated_at
-	err := database.DB.QueryRow(query, args...).Scan(&deviceCode, &startTime, &endTime, &alarmData, &deactivatedAt)
+	err := database.DB.QueryRow(query, args...).Scan(
+		&deviceCode,
+		&startTime,
+		&endTime,
+		&alarmData,
+		&deactivatedAt,
+	)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		writeErrorJSON(w, http.StatusNotFound, "دستگاهی با این مشخصات (نام و IMEI و تاریخ) پیدا نشد")
+		writeErrorJSON(w, http.StatusNotFound, "دستگاهی با این مشخصات پیدا نشد")
 		return
 	}
 	if err != nil {
@@ -190,20 +197,20 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	deviceCodeValue := strings.TrimSpace(deviceCode.String)
 	if !deviceCode.Valid || deviceCodeValue == "" {
-		writeErrorJSON(w, http.StatusBadRequest, "کد دستگاه برای این دستگاه تنظیم نشده است")
+		writeErrorJSON(w, http.StatusBadRequest, "کد دستگاه (customer_id) برای این رکورد تنظیم نشده است")
 		return
 	}
 
-	// 💡💡💡 تغییر ۵ (قلب ماجرا): تعیین تاریخ پایان نهایی برای کوئری لاگ‌ها
-	var finalEndTime sql.NullTime
+	// تعیین سقف زمانی معتبر برای لاگ‌ها (اولویت با deactivated_at است)
+	finalEndTime := endTime
 	if deactivatedAt.Valid {
-		finalEndTime = deactivatedAt // اگه تاریخ غیرفعالی داشت، از اون استفاده کن
-	} else {
-		finalEndTime = endTime // وگرنه، از تاریخ پایان ماموریت استفاده کن
+		finalEndTime = deactivatedAt
 	}
 
 	startTimeParam := nullTimeValue(startTime)
-	endTimeParam := nullTimeValue(finalEndTime) // <--- اینجا از متغیر جدید استفاده می‌کنیم
+	endTimeParam := nullTimeValue(finalEndTime)
+
+	// ۱. دریافت آخرین لاگ معتبر دارای دیتا و مدل سنسورها
 	var validLogData []byte
 	var lastValidDataTime sql.NullTime
 
@@ -213,7 +220,7 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		WHERE data->>'customer_id' = $1
 		  AND data ? 'model'
 		  AND ($2::timestamptz IS NULL OR created_at >= $2)
-		  AND ($3::timestamptz IS NULL OR created_at <= $3) -- <--- این شرط حالا هوشمندانه عمل می‌کنه
+		  AND ($3::timestamptz IS NULL OR created_at <= $3)
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, deviceCodeValue, startTimeParam, endTimeParam).Scan(&validLogData, &lastValidDataTime)
@@ -227,6 +234,7 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		validLogData = []byte(`{}`)
 	}
 
+	// ۲. دریافت آخرین وضعیت ثبت‌شده دستگاه (برای چک پیام صریح آفلاین)
 	var lastStatus sql.NullString
 	var createdAt sql.NullTime
 
@@ -250,17 +258,32 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		writeErrorJSON(w, http.StatusInternalServerError, "خطا در تبدیل داده لاگ")
 		return
 	}
-	if lastStatus.Valid && lastStatus.String == "offline" {
+
+	// ⏱️ لاجیک تشخیص آفلاین بودن:
+	// - لاگ صریح آفلاین اومده باشه
+	// - یا از آخرین لاگ معتبر بیش از ۵ دقیقه گذشته باشه
+	// - یا اصلاً لاگ معتبری ثبت نشده باشه
+	isOffline := false
+
+	if (lastStatus.Valid && strings.ToLower(lastStatus.String) == "offline") ||
+		!lastValidDataTime.Valid ||
+		time.Since(lastValidDataTime.Time) > 5*time.Minute {
+		isOffline = true
+	}
+
+	if isOffline {
 		finalLogData["IMEI"] = "offline"
-	} else if lastStatus.Valid && lastStatus.String != "" {
+	} else {
 		finalLogData["IMEI"] = deviceIMEI
 	}
 
+	// ساخت پاسخ نهایی
 	response := models.DeviceDetailsResponse{
 		IMEI:       deviceIMEI,
 		DeviceName: deviceName,
 		Data:       finalLogData,
 	}
+
 	if len(alarmData) > 0 {
 		response.Alarm = alarmData
 	}
@@ -276,7 +299,6 @@ func GetDeviceLogDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	if lastValidDataTime.Valid {
 		response.LastValidDataTime = &lastValidDataTime.Time
 	}
-	// 💡 تغییر ۶: پر کردن فیلد جدید در پاسخ نهایی
 	if deactivatedAt.Valid {
 		response.DeactivatedAt = &deactivatedAt.Time
 	}
