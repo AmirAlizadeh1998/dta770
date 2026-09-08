@@ -11,7 +11,6 @@ const SensorDataCards: React.FC<SensorDataProps> = ({ data }) => {
 
     // ۳. به تایپ‌اسکریپت می‌فهمونیم که داخل هر گروه، یه آبجکت با کلید استرینگ و مقدار انی داریم
     const groups: Record<string, Record<string, any>> = {
-        "اطلاعات دستگاه": {},
         "ولتاژ (V)": {},
         "جریان (I)": {},
         "توان (ظاهری،اکتیو،راکتیو)": {},
@@ -21,12 +20,7 @@ const SensorDataCards: React.FC<SensorDataProps> = ({ data }) => {
     };
 
     Object.entries(data).forEach(([key, value]) => {
-        if (key.includes('IMEI') || key.includes('model') ||
-            key.includes('acin') || key.includes('clock') ||
-            key.includes('sig') || key.includes('customer_id')
-        ) {
-            groups["اطلاعات دستگاه"][key] = value;
-        } else if (key.startsWith('v_')) {
+        if (key.startsWith('v_')) {
             groups["ولتاژ (V)"][key] = value;
         } else if (key.startsWith('ir_') || key.startsWith('is_') || key.startsWith('it_')) {
             groups["جریان (I)"][key] = value;

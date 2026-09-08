@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import SensorDataCards from "../../components/FormattedLogs";
 import JalaliDatePicker from "../../components/JalaliDatePicker.tsx";
-import {FormatSignalQuality, FormatToJalali} from "../../utils/Formatters.ts";
-import * as XLSX from 'xlsx'
-import {FaFileExcel} from "react-icons/fa";
+import { FormatSignalQuality, FormatToJalali } from "../../utils/Formatters.ts";
+import * as XLSX from 'xlsx';
+import { FaFileExcel } from "react-icons/fa";
 import Select from "react-select";
-import type {Device} from "../../models/device.ts";
-import {apiFetch} from "../../api/ApiClient.ts";
+import type { Device } from "../../models/device.ts";
+import { apiFetch } from "../../api/ApiClient.ts";
 
 interface DeviceLog {
     id: number;
@@ -38,18 +38,15 @@ const LogsTable = () => {
     // استیت‌های صفحه‌بندی
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    // ✨ استیت جدید برای تعداد کل رکوردها
     const [totalRecords, setTotalRecords] = useState<number>(0);
     const limit = 10;
 
     const [sortBy, setSortBy] = useState<string>("created_at");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-    // کنترل باز و بسته بودن مودال
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     // فیلترهای مخصوص اکسل
     const options: ExportDeviceOption[] = devices.map((device) => ({
-        // IMEI alone is not unique, so keep the complete selection identity.
         value: getExportDeviceKey(device.device_name, device.imei),
         label: `${device.device_name} - ${device.imei}`,
         deviceName: device.device_name,
@@ -93,7 +90,6 @@ const LogsTable = () => {
                 const data = await response.json();
                 setLogs(data.logs || []);
                 setTotalPages(data.totalPages || 1);
-                // ✨ دریافت تعداد کل رکوردها از بک‌اند (حتماً چک کن بک‌اندت اینو بفرسته)
                 setTotalRecords(data.totalLogs || 0);
             } else {
                 console.error("داداش مشکلی تو گرفتن دیتا پیش اومد!");
@@ -155,17 +151,15 @@ const LogsTable = () => {
 
     const exportToExcel = async () => {
         try {
-            // ۱. پارامترها رو آماده می‌کنیم
             const params = new URLSearchParams();
             if (exportImei) {
                 params.append("device_name", exportDeviceName);
                 params.append("imei", exportImei);
             }
-            if (exportLimit > 0) params.append("limit", exportLimit.toString()); // عدد ۰ یعنی لیمیت نداریم
+            if (exportLimit > 0) params.append("limit", exportLimit.toString());
             if (exportStartDate) params.append("startDate", toEnglishDigits(exportStartDate));
             if (exportEndDate) params.append("endDate", toEnglishDigits(exportEndDate));
 
-            // ۲. درخواست به بک‌اند برای دریافت دیتای کاملِ فیلتر شده
             const response = await fetch(`/api/export-device-logs?${params.toString()}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -186,20 +180,12 @@ const LogsTable = () => {
             }
 
             const cleanValue = (val: any) => {
-                // اگه کلا خالی بود
-                if (val === null || val === undefined || val === '') {
-                    return '-';
-                }
-                // تبدیل به رشته فقط برای چک کردن کلمه‌ی nan
+                if (val === null || val === undefined || val === '') return '-';
                 const strVal = String(val).toLowerCase();
-                if (strVal === 'nan' || strVal === '-nan') {
-                    return '-';
-                }
-                // خود مقدار رو برمی‌گردونیم تا توی اکسل هم به عنوان "عدد" شناخته بشه نه متن
+                if (strVal === 'nan' || strVal === '-nan') return '-';
                 return val;
             };
 
-            // ۳. فرمت کردن دیتا برای فایل اکسل
             const excelData = exportData
                 .filter((log: DeviceLog) => log.data && log.data.IMEI !== 'offline')
                 .map((log: DeviceLog) => ({
@@ -207,23 +193,19 @@ const LogsTable = () => {
                     "IMEI": cleanValue(log.data.IMEI),
                     "acin": cleanValue(log.data.acin),
                     "model": cleanValue(log.data.model),
-
-                    // General Info
                     "work_clock": cleanValue(log.data.work_clock),
                     "customer_id": cleanValue(log.data.customer_id),
                     "sig_quality": cleanValue(FormatSignalQuality(log.data.sig_quality)),
 
-                    // IR
+                    // IR, IS, IT
                     "ir_ave": cleanValue(log.data.ir_ave),
                     "ir_cur": cleanValue(log.data.ir_cur),
                     "ir_max": cleanValue(log.data.ir_max),
                     "ir_min": cleanValue(log.data.ir_min),
-                    // IS
                     "is_ave": cleanValue(log.data.is_ave),
                     "is_cur": cleanValue(log.data.is_cur),
                     "is_max": cleanValue(log.data.is_max),
                     "is_min": cleanValue(log.data.is_min),
-                    // IT
                     "it_ave": cleanValue(log.data.it_ave),
                     "it_cur": cleanValue(log.data.it_cur),
                     "it_max": cleanValue(log.data.it_max),
@@ -246,32 +228,27 @@ const LogsTable = () => {
                     "frq_max": cleanValue(log.data.frq_max),
                     "frq_min": cleanValue(log.data.frq_min),
 
-                    // Voltage RN
+                    // Voltages
                     "v_rn_ave": cleanValue(log.data.v_rn_ave),
                     "v_rn_cur": cleanValue(log.data.v_rn_cur),
                     "v_rn_max": cleanValue(log.data.v_rn_max),
                     "v_rn_min": cleanValue(log.data.v_rn_min),
-                    // Voltage RS
                     "v_rs_ave": cleanValue(log.data.v_rs_ave),
                     "v_rs_cur": cleanValue(log.data.v_rs_cur),
                     "v_rs_max": cleanValue(log.data.v_rs_max),
                     "v_rs_min": cleanValue(log.data.v_rs_min),
-                    // Voltage RT
                     "v_rt_ave": cleanValue(log.data.v_rt_ave),
                     "v_rt_cur": cleanValue(log.data.v_rt_cur),
                     "v_rt_max": cleanValue(log.data.v_rt_max),
                     "v_rt_min": cleanValue(log.data.v_rt_min),
-                    // Voltage SN
                     "v_sn_ave": cleanValue(log.data.v_sn_ave),
                     "v_sn_cur": cleanValue(log.data.v_sn_cur),
                     "v_sn_max": cleanValue(log.data.v_sn_max),
                     "v_sn_min": cleanValue(log.data.v_sn_min),
-                    // Voltage TN
                     "v_tn_ave": cleanValue(log.data.v_tn_ave),
                     "v_tn_cur": cleanValue(log.data.v_tn_cur),
                     "v_tn_max": cleanValue(log.data.v_tn_max),
                     "v_tn_min": cleanValue(log.data.v_tn_min),
-                    // Voltage TS
                     "v_ts_ave": cleanValue(log.data.v_ts_ave),
                     "v_ts_cur": cleanValue(log.data.v_ts_cur),
                     "v_ts_max": cleanValue(log.data.v_ts_max),
@@ -295,7 +272,7 @@ const LogsTable = () => {
                     "cos_total_max": cleanValue(log.data.cos_total_max),
                     "cos_total_min": cleanValue(log.data.cos_total_min),
 
-                    // Active Power
+                    // Powers
                     "p_act_r_ave": cleanValue(log.data.p_act_r_ave),
                     "p_act_r_cur": cleanValue(log.data.p_act_r_cur),
                     "p_act_r_max": cleanValue(log.data.p_act_r_max),
@@ -311,7 +288,6 @@ const LogsTable = () => {
                     "p_act_into_grid": cleanValue(log.data.p_act_into_grid),
                     "p_act_into_load": cleanValue(log.data.p_act_into_load),
 
-                    // Reactive Power
                     "p_ract_r_ave": cleanValue(log.data.p_ract_r_ave),
                     "p_ract_r_cur": cleanValue(log.data.p_ract_r_cur),
                     "p_ract_r_max": cleanValue(log.data.p_ract_r_max),
@@ -327,7 +303,6 @@ const LogsTable = () => {
                     "p_ract_into_grid": cleanValue(log.data.p_ract_into_grid),
                     "p_ract_into_load": cleanValue(log.data.p_ract_into_load),
 
-                    // Apparent Power
                     "p_apparent_r_ave": cleanValue(log.data.p_apparent_r_ave),
                     "p_apparent_r_cur": cleanValue(log.data.p_apparent_r_cur),
                     "p_apparent_r_max": cleanValue(log.data.p_apparent_r_max),
@@ -391,19 +366,15 @@ const LogsTable = () => {
                     "harmonic_15_T": cleanValue(log.data.harmonic_15_T)
                 }));
 
-            // ۴. ساخت شیت اکسل
             const worksheet = XLSX.utils.json_to_sheet(excelData);
-            worksheet['!dir'] = 'rtl'; // راست‌چین کردن فایل اکسل
+            worksheet['!dir'] = 'rtl';
 
-            // ۵. ساخت فایل و دانلود
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Sensor Logs");
 
-            // یه اسم تر و تمیز برای فایل می‌سازیم
             const fileName = `Export_${exportImei || 'All'}_${new Date().toISOString().slice(0,10)}.xlsx`;
             XLSX.writeFile(workbook, fileName);
 
-            // ۶. بستن مودال بعد از دانلود موفق
             setIsExportModalOpen(false);
 
         } catch (error) {
@@ -426,7 +397,6 @@ const LogsTable = () => {
 
     return (
         <div className="p-4" dir="rtl">
-            {/* ✨ تغییر اول: عنوان و دکمه اکسل رو گذاشتیم تو یه ردیف */}
             <button
                 onClick={() => setIsExportModalOpen(true)}
                 className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-4 py-2 rounded-md transition text-sm shadow-sm"
@@ -436,9 +406,7 @@ const LogsTable = () => {
             </button>
 
             {/* بخش فیلترها */}
-            <div className="mb-6 flex flex-col md:flex-row items-end gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-
-                {/* ✨ تغییر دوم: دکمه اکسل قبلی رو از اینجا حذف کن که فقط اینپوت سرچ بمونه */}
+            <div className="mb-6 mt-4 flex flex-col md:flex-row items-end gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex-1 w-full">
                     <label className="block text-sm text-gray-600 mb-1">جستجوی IMEI</label>
                     <input
@@ -475,16 +443,17 @@ const LogsTable = () => {
                     <thead className="bg-gray-100 text-gray-700 select-none">
                     <tr>
                         <th
-                            className="py-3 px-4 border-b text-right font-semibold cursor-pointer hover:bg-gray-200 transition-colors"
+                            className="py-3 px-4 border-b text-center font-semibold cursor-pointer hover:bg-gray-200 transition-colors w-40"
                             onClick={() => handleSort("created_at")}
                         >
                             زمان {sortBy === "created_at" && (sortOrder === "asc" ? "⬆️" : "⬇️")}
                         </th>
+                        {/* ✨ تغییر هدر: اطلاعات دستگاه */}
                         <th
-                            className="py-3 px-4 border-b text-right font-semibold cursor-pointer hover:bg-gray-200 transition-colors"
+                            className="py-3 px-4 border-b text-right font-semibold cursor-pointer hover:bg-gray-200 transition-colors min-w-[260px]"
                             onClick={() => handleSort("imei")}
                         >
-                            IMEI {sortBy === "imei" && (sortOrder === "asc" ? "⬆️" : "⬇️")}
+                            اطلاعات دستگاه {sortBy === "imei" && (sortOrder === "asc" ? "⬆️" : "⬇️")}
                         </th>
                         <th className="py-3 px-4 border-b text-right font-semibold">پارامتر ها</th>
                     </tr>
@@ -494,13 +463,64 @@ const LogsTable = () => {
                         .filter(log => log.data.IMEI !== 'offline')
                         .map((log) => (
                             <tr key={log.id} className="hover:bg-slate-50 transition-colors border-b">
-                                <td className="py-3 px-4 text-sm text-slate-500 whitespace-nowrap text-center" dir="ltr">
+                                <td className="py-3 px-4 text-xs text-slate-600 whitespace-nowrap text-center align-middle" dir="ltr">
                                     {FormatToJalali(log.created_at)}
                                 </td>
-                                <td className="py-3 px-4 font-mono text-sm text-slate-700 whitespace-nowrap text-center">
-                                    {log.data.IMEI || '-'}
+
+                                {/* ✨ ستون اطلاعات دستگاه تفکیک شده */}
+                                <td className="py-3 px-4 align-top">
+                                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 flex flex-col gap-1.5 text-xs">
+                                        <div className="flex items-center justify-between border-b border-slate-200 pb-1">
+                                            <span className="text-slate-500 font-medium">IMEI:</span>
+                                            <span className="font-mono font-semibold text-slate-800" dir="ltr">
+                                                {log.data.IMEI || '-'}
+                                            </span>
+                                        </div>
+
+                                        {log.data.model && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-500">مدل:</span>
+                                                <span className="font-medium text-slate-700">{log.data.model}</span>
+                                            </div>
+                                        )}
+
+                                        {log.data.customer_id !== undefined && log.data.customer_id !== '' && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-500">کد دستگاه:</span>
+                                                <span className="font-medium text-slate-700">{log.data.customer_id}</span>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-500">کیفیت سیگنال:</span>
+                                            <span className="font-medium text-blue-600" dir="ltr">
+                                                {FormatSignalQuality(log.data.sig_quality)}
+                                            </span>
+                                        </div>
+
+                                        {log.data.acin !== undefined && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-500">وضعیت برق AC:</span>
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                                    String(log.data.acin) === '1' || log.data.acin === true
+                                                        ? 'bg-emerald-100 text-emerald-700'
+                                                        : 'bg-rose-100 text-rose-700'
+                                                }`}>
+                                                    {String(log.data.acin) === '1' || log.data.acin === true ? 'وصل' : 'قطع'}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {log.data.work_clock !== undefined && log.data.work_clock !== '' && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-500">ساعت کارکرد:</span>
+                                                <span className="font-mono text-slate-700" dir="ltr">{log.data.work_clock}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
-                                <td className="py-3 px-4 text-sm">
+
+                                <td className="py-3 px-4 text-sm align-top">
                                     <SensorDataCards data={log.data} />
                                 </td>
                             </tr>
@@ -510,11 +530,10 @@ const LogsTable = () => {
                 </table>
             </div>
 
-            {/* ✨ بخش صفحه‌بندی آپدیت شده */}
+            {/* صفحه‌بندی */}
             {totalPages > 0 && (
                 <div className="flex flex-col items-center justify-center gap-3 mt-6">
                     <div className="flex items-center gap-2">
-                        {/* دکمه اولین */}
                         <button
                             disabled={page === 1}
                             onClick={() => setPage(1)}
@@ -541,7 +560,6 @@ const LogsTable = () => {
                             بعدی
                         </button>
 
-                        {/* دکمه آخرین */}
                         <button
                             disabled={page === totalPages}
                             onClick={() => setPage(totalPages)}
@@ -551,19 +569,16 @@ const LogsTable = () => {
                         </button>
                     </div>
 
-                    {/* نمایش تعداد کل رکوردها */}
                     <div className="text-xs text-gray-500 font-medium">
                         تعداد کل رکوردها: <span className="font-bold text-gray-700">{totalRecords.toLocaleString("fa-IR")}</span>
                     </div>
                 </div>
             )}
 
-            {/* مودال تنظیمات خروجی اکسل */}
+            {/* مودال خروجی اکسل */}
             {isExportModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
-
-                        {/* دکمه بستن */}
                         <button
                             onClick={() => setIsExportModalOpen(false)}
                             className="absolute top-4 left-4 text-gray-400 hover:text-gray-600"
@@ -574,7 +589,6 @@ const LogsTable = () => {
                         <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">تنظیمات خروجی اکسل 📊</h3>
 
                         <div className="space-y-4">
-                            {/* فیلتر تعداد */}
                             <div>
                                 <Select
                                     options={options}
@@ -599,7 +613,7 @@ const LogsTable = () => {
                                     value={limitOptions.find(option => option.value === exportLimit) || limitOptions[0]}
                                     onChange={(selectedOption) => setExportLimit(selectedOption ? selectedOption.value : 100)}
                                     isRtl={true}
-                                    isSearchable={false} // نیازی به سرچ نداره چون گزینه‌ها کمه
+                                    isSearchable={false}
                                     placeholder="انتخاب تعداد..."
                                     styles={{
                                         control: (base) => ({
@@ -609,18 +623,15 @@ const LogsTable = () => {
                                 />
                             </div>
 
-                            {/* فیلتر از تاریخ */}
                             <div className="flex-1 w-full">
                                 <JalaliDatePicker label="از تاریخ" value={exportStartDate} onChange={(val) => setExportStartDate(val)} />
                             </div>
 
-                            {/* فیلتر تا تاریخ */}
                             <div className="flex-1 w-full">
                                 <JalaliDatePicker label="تا تاریخ" value={exportEndDate} onChange={(val) => setExportEndDate(val)} />
                             </div>
                         </div>
 
-                        {/* دکمه‌های اکشن */}
                         <div className="mt-8 flex gap-3">
                             <button
                                 onClick={() => { exportToExcel() }}
@@ -638,7 +649,6 @@ const LogsTable = () => {
                     </div>
                 </div>
             )}
-
         </div>
     );
 };
