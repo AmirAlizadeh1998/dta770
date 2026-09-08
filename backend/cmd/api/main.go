@@ -5,6 +5,7 @@ import (
 	"dta770/internal/database"
 	"dta770/internal/handlers"
 	"dta770/internal/middleware"
+	"dta770/worker"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -48,6 +49,7 @@ func main() {
 
 	// ۳. اجرای دیتابیس
 	database.InitDB()
+	worker.StartDeviceDeactivationWorker(database.DB)
 
 	// ۴. تنظیم روت‌ها
 	mux := http.NewServeMux()
