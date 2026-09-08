@@ -1,33 +1,40 @@
 // components/JalaliDatePicker.tsx
 import { useState, useRef, useEffect } from "react";
 import DatePicker, { DateObject } from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian"
-import persian_fa from "react-date-object/locales/persian_fa"
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
 import TimePicker from "react-multi-date-picker/plugins/time_picker";
 
 const DatePickerComponent = (DatePicker as any).default || DatePicker;
 const TimePickerPlugin = (TimePicker as any).default || TimePicker;
 
 type Props = {
-    label: string
-    value: string
-    onChange: (val: string) => void
-    error?: string
-    required?: boolean
-}
+    label: string;
+    value: string;
+    onChange: (val: string) => void;
+    error?: string;
+    required?: boolean;
+};
 
 export default function JalaliDatePicker({ label, value, onChange, error, required }: Props) {
     const datePickerRef = useRef<any>(null);
-    const [tempDate, setTempDate] = useState<DateObject | Date | null>(value ? new Date(value) : null);
+
+    // مقداردهی با خود DateObject برای مدیریت دقیق تایم‌زون و تقویم
+    const [tempDate, setTempDate] = useState<DateObject | null>(
+        value ? new DateObject({ date: new Date(value), calendar: persian, locale: persian_fa }) : null
+    );
 
     useEffect(() => {
-        setTempDate(value ? new Date(value) : null);
+        if (value) {
+            setTempDate(new DateObject({ date: new Date(value), calendar: persian, locale: persian_fa }));
+        } else {
+            setTempDate(null);
+        }
     }, [value]);
 
     const handleConfirm = () => {
         if (tempDate) {
-            const dateToSave = tempDate instanceof DateObject ? tempDate.toDate() : tempDate;
-            onChange((dateToSave as Date).toISOString());
+            onChange(tempDate.toDate().toISOString());
         } else {
             onChange("");
         }
@@ -50,22 +57,17 @@ export default function JalaliDatePicker({ label, value, onChange, error, requir
                     ref={datePickerRef}
                     calendar={persian}
                     locale={persian_fa}
-
-                    // ✨ جادوی واقعی اینجاست ✨
-                    multiple // تقویم رو چندتایی می‌کنیم تا بسته نشه
-                    value={tempDate ? [tempDate] : []} // مقدار رو به صورت آرایه میدیم
-                    onChange={(dates: DateObject[]) => {
-                        if (dates && dates.length > 0) {
-                            const selected = dates[dates.length - 1];
-                            setTempDate(selected);
-                            // همون لحظه به کامپوننت پدر هم خبر می‌دیم!
-                            onChange(selected.toDate().toISOString());
+                    value={tempDate}
+                    onChange={(date: DateObject | null) => {
+                        if (date) {
+                            setTempDate(date);
+                            // اگه میخوای به محض تغییر تایم یا روز به والد خبر داده بشه:
+                            onChange(date.toDate().toISOString());
                         } else {
                             setTempDate(null);
                             onChange("");
                         }
                     }}
-
                     format="YYYY/MM/DD HH:mm:ss"
                     plugins={[
                         <TimePickerPlugin position="bottom" />
@@ -95,5 +97,5 @@ export default function JalaliDatePicker({ label, value, onChange, error, requir
                 {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
             </div>
         </div>
-    )
+    );
 }
