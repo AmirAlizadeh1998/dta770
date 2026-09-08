@@ -463,6 +463,28 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 🔍 بررسی اینکه آیا دستگاه فعالی با همین IMEI در دیتابیس وجود دارد یا نه
+	var activeCount int
+	checkActiveQuery := `SELECT COUNT(*) FROM devices WHERE imei = $1 AND is_active = true`
+	err := database.DB.QueryRow(checkActiveQuery, d.Imei).Scan(&activeCount)
+	if err != nil {
+		log.Printf("Error checking active device IMEI: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "خطا در بررسی وضعیت دستگاه‌های موجود",
+		})
+		return
+	}
+
+	if activeCount > 0 {
+		w.WriteHeader(http.StatusConflict) // 409 Conflict
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "یک دستگاه فعال با این IMEI در حال حاضر وجود دارد! 🚫",
+		})
+		return
+	}
+
+	// اگر دستگاه فعالی وجود نداشت، میریم سراغ ثبت
 	query := `
 		INSERT INTO devices (
 			device_name, owner_name, imei, start_time, end_time, phone, address,
@@ -481,7 +503,7 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 
 	var newID int
 
-	err := database.DB.QueryRow(
+	err = database.DB.QueryRow(
 		query,
 		d.DeviceName,
 		d.OwnerName,
@@ -510,7 +532,6 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "23505") {
 			w.WriteHeader(http.StatusConflict) // 409 Conflict
 
-			// اگر ارور مربوط به کد دستگاه باشه
 			if strings.Contains(err.Error(), "unique_device_code") {
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"message": "این کد دستگاه قبلاً ثبت شده است! 🚫",
@@ -518,7 +539,6 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// اگر ارور مربوط به ترکیب نام و IMEI باشه
 			if strings.Contains(err.Error(), "unique_device_name_imei") {
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"message": "دستگاهی با این ترکیب نام و IMEI قبلاً ثبت شده است! 🚫",
@@ -526,7 +546,6 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// اگر ارور یونیک دیگه‌ای بود که پیش‌بینی نکرده بودیم
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"message": "مقدار وارد شده تکراری است! 🚫",
 			})
@@ -541,7 +560,7 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated) // 201 Created برای ساخت منبع جدید
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "دستگاه با موفقیت ذخیره شد",
@@ -550,11 +569,39 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
+	w.Header().Set("Content-Type", "application/json")
+
 	var d models.Device
 
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		http.Error(w, "فرمت داده‌ها غلط است", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "فرمت داده‌ها نامعتبر است! 🚫",
+		})
 		return
+	}
+
+	// 🔍 اگه قراره دستگاه فعال باشه، چک می‌کنیم دستگاه دیگه‌ای با این IMEI فعال نباشه
+	if d.IsActive {
+		var activeCount int
+		checkActiveQuery := `SELECT COUNT(*) FROM devices WHERE imei = $1 AND is_active = true AND id != $2`
+		err := database.DB.QueryRow(checkActiveQuery, d.Imei, id).Scan(&activeCount)
+		if err != nil {
+			log.Printf("Error checking active device IMEI in update: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "خطا در بررسی وضعیت دستگاه‌های موجود",
+			})
+			return
+		}
+
+		if activeCount > 0 {
+			w.WriteHeader(http.StatusConflict) // 409 Conflict
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "یک دستگاه فعال دیگر با این IMEI در حال حاضر وجود دارد! 🚫",
+			})
+			return
+		}
 	}
 
 	query := `
@@ -612,20 +659,25 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		time.Now().Format(time.RFC3339),
 		d.Alarm,
 		d.OwnerName,
-		d.DeviceCode, // 👈 این هم اضافه شد
+		d.DeviceCode,
 		id,
 	)
 
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-
-		// بررسی خطای تکراری در آپدیت
+		// بررسی خطای Unique Constraint (کد 23505 در Postgres)
 		if strings.Contains(err.Error(), "23505") {
 			w.WriteHeader(http.StatusConflict) // کد 409
 
 			if strings.Contains(err.Error(), "unique_device_code") {
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"message": "این کد دستگاه قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
+				})
+				return
+			}
+
+			if strings.Contains(err.Error(), "unique_device_name_imei") {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"message": "ترکیب این نام و IMEI قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
 				})
 				return
 			}
@@ -647,15 +699,22 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 	affectedRows, err := result.RowsAffected()
 	if err != nil {
 		log.Printf("Error checking affected rows: %v", err)
-		http.Error(w, "خطای داخلی سرور", http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "خطای داخلی سرور",
+		})
 		return
 	}
 
 	if affectedRows == 0 {
-		http.Error(w, "دستگاه پیدا نشد", http.StatusNotFound)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "دستگاه مورد نظر پیدا نشد! 🔍",
+		})
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "دستگاه با موفقیت بروزرسانی شد",

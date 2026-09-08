@@ -270,18 +270,33 @@ export default function DeviceManagePage() {
                 console.error(data.message || "خطا در ذخیره اطلاعات")
                 alert(data.message || "خطایی رخ داده است ❌")
 
-                // خطای تکراری بودن (409 Conflict)
+                // مدیریت دقیق خطاهای 409 (Conflict)
                 if (response.status === 409) {
-                    if (data.message && data.message.includes("کد دستگاه")) {
+                    const msg = data.message || ""
+
+                    if (msg.includes("کد دستگاه")) {
                         setErrors((prev) => ({
                             ...prev,
                             deviceCode: "این کد دستگاه قبلاً در دیتابیس ثبت شده است",
                         }))
-                    } else {
+                    } else if (msg.includes("دستگاه فعال دیگر") || msg.includes("فعال")) {
+                        // 👈 خطای وجود دستگاه فعال با همین IMEI
+                        setErrors((prev) => ({
+                            ...prev,
+                            imei: "یک دستگاه فعال دیگر با این IMEI وجود دارد!",
+                        }))
+                    } else if (msg.includes("ترکیب") || msg.includes("نام و IMEI")) {
+                        // خطای یونیک بودن ترکیب نام و IMEI
                         setErrors((prev) => ({
                             ...prev,
                             deviceName: "ترکیب این نام و IMEI تکراری است",
-                            imei: "این IMEI با این نام قبلاً ثبت شده است",
+                            imei: "ترکیب این نام و IMEI تکراری است",
+                        }))
+                    } else {
+                        // در صورتی که پیام دیگه‌ای بود
+                        setErrors((prev) => ({
+                            ...prev,
+                            imei: msg,
                         }))
                     }
                 }
