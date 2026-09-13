@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"dta770/config"
 	"dta770/internal/database"
 	"dta770/internal/handlers"
@@ -8,6 +10,7 @@ import (
 	"dta770/worker"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -15,6 +18,89 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
+
+// ==========================================
+// 1. میدل‌ور جدید برای فیلتر کردن PING ها
+// ==========================================
+
+type gapGPTTransport struct {
+	Base http.RoundTripper
+}
+
+func (t *gapGPTTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.Base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	resp, err := base.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = &pingFilterBody{
+		ReadCloser: resp.Body,
+		bufReader:  bufio.NewReader(resp.Body),
+		leftover:   &bytes.Buffer{},
+	}
+	return resp, nil
+}
+
+type pingFilterBody struct {
+	io.ReadCloser
+	bufReader    *bufio.Reader
+	leftover     *bytes.Buffer
+	eventHasData bool // اضافه کردن این فلگ برای مدیریت خطوط خالی
+}
+
+func (b *pingFilterBody) Read(p []byte) (int, error) {
+	if b.leftover.Len() > 0 {
+		return b.leftover.Read(p)
+	}
+
+	for {
+		line, err := b.bufReader.ReadBytes('\n')
+
+		trimmed := bytes.TrimSpace(line)
+
+		// ۱. اگر خط کامنت است (مثل PING)
+		if len(trimmed) > 0 && bytes.HasPrefix(trimmed, []byte(":")) {
+			if err != nil {
+				return 0, err
+			}
+			continue // کامنت دراپ می‌شود
+		}
+
+		// ۲. بررسی خالی بودن خط (جداکننده‌ی ایونت‌ها)
+		if len(trimmed) == 0 {
+			if len(line) > 0 { // یعنی فقط \n یا \r\n خونده شده
+				if b.eventHasData {
+					// چون دیتا داشتیم، این خط خالی رو به عنوان پایان ایونت پاس می‌دیم
+					b.leftover.Write(line)
+					b.eventHasData = false
+				} else {
+					// خط خالی اضافی و بدون دیتا (مثل خطِ بعد از PING) دراپ میشه
+					// تا کلاینت سعی نکنه ایونت خالی رو پارس کنه
+					if err != nil {
+						return 0, err
+					}
+					continue
+				}
+			}
+		} else {
+			// ۳. دیتای معتبر (مثل data: ...)
+			b.eventHasData = true
+			b.leftover.Write(line)
+		}
+
+		// ۴. خروج و برگرداندن داده
+		if b.leftover.Len() > 0 {
+			return b.leftover.Read(p)
+		}
+
+		if err != nil {
+			return 0, err
+		}
+	}
+}
 
 func usersRouter(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -41,8 +127,13 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	filteredHTTPClient := &http.Client{
+		Transport: &gapGPTTransport{Base: http.DefaultTransport},
+	}
+
 	// ۲. ساخت کلاینت رسمی OpenAI با BaseURL سفارشی GapGPT
 	gapGptClient := openai.NewClient(
+		option.WithHTTPClient(filteredHTTPClient),
 		option.WithBaseURL("https://api.gapgpt.app/v1"),
 		option.WithAPIKey(cfg.GapAPIKey),
 	)
