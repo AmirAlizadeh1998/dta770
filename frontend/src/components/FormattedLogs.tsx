@@ -1,30 +1,49 @@
 import React from 'react';
 
-// ۱. اینجا بهش می‌گیم که دیتا یه آبجکت با کلیدهای متنی و مقادیر دلخواهه
 interface SensorDataProps {
     data: Record<string, any>;
 }
 
-// ۲. به کامپوننت می‌گیم از این تایپ استفاده کن
+// لیست کلیدهایی که نمی‌خوایم توی کارت‌های سنسور نشون داده بشن (چون توی ستون مشخصات دستگاه هستن)
+const IGNORED_KEYS = new Set([
+    'imei',
+    'IMEI',
+    'acin',
+    'model',
+    'customer_id',
+    'work_clock',
+    'sig_quality',
+    'id',
+    'created_at'
+]);
+
 const SensorDataCards: React.FC<SensorDataProps> = ({ data }) => {
     if (!data) return <span>دیتایی وجود ندارد</span>;
 
-    // ۳. به تایپ‌اسکریپت می‌فهمونیم که داخل هر گروه، یه آبجکت با کلید استرینگ و مقدار انی داریم
     const groups: Record<string, Record<string, any>> = {
         "ولتاژ (V)": {},
         "جریان (I)": {},
         "توان (ظاهری،اکتیو،راکتیو)": {},
+        "ضریب توان (Cos φ)": {}, // اختیاری: اگه cos_phi داشتی خوش‌دست‌تره
         "فرکانس (f)": {},
         "هارمونیک و THD": {},
         "سایر": {}
     };
 
     Object.entries(data).forEach(([key, value]) => {
+        // ۱. اگه کلید جزو مشخصات عمومی دستگاه بود، ردش کن
+        if (IGNORED_KEYS.has(key) || IGNORED_KEYS.has(key.toLowerCase())) {
+            return;
+        }
+
+        // ۲. بقیه رو بفرست توی دسته‌بندی خودشون
         if (key.startsWith('v_')) {
             groups["ولتاژ (V)"][key] = value;
         } else if (key.startsWith('ir_') || key.startsWith('is_') || key.startsWith('it_')) {
             groups["جریان (I)"][key] = value;
-        } else if (key.startsWith('p_')) {
+        } else if (key.startsWith('cos_')) {
+            groups["ضریب توان (Cos φ)"][key] = value;
+        } else if (key.startsWith('p_') || key.startsWith('p_act') || key.startsWith('p_ract') || key.startsWith('p_apparent')) {
             groups["توان (ظاهری،اکتیو،راکتیو)"][key] = value;
         } else if (key.startsWith('frq_')) {
             groups["فرکانس (f)"][key] = value;
@@ -41,14 +60,15 @@ const SensorDataCards: React.FC<SensorDataProps> = ({ data }) => {
             flexWrap: 'wrap',
             gap: '10px',
             fontSize: '12px',
-            maxHeight: '150px', // ارتفاع رو می‌تونی بسته به سلیقه‌ت کم و زیاد کنی
-            overflowY: 'auto',  // اسکرول عمودی رو فعال می‌کنه
+            maxHeight: '150px',
+            overflowY: 'auto',
             padding: '8px',
-            border: '1px solid #e5e7eb', // یه حاشیه کمرنگ و تمیز
+            border: '1px solid #e5e7eb',
             borderRadius: '6px',
-            backgroundColor: '#fafafa' // یه بک‌گراند خیلی ملایم که کارت‌ها خودشون رو نشون بدن
+            backgroundColor: '#fafafa'
         }}>
             {Object.entries(groups).map(([groupName, items]) => {
+                // اگه دسته‌ای خالی بود (مثلاً سایر دیگه خالی شد)، اصلاً رندرش نکن
                 if (Object.keys(items).length === 0) return null;
 
                 return (
