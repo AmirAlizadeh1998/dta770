@@ -30,7 +30,7 @@ const LogsTable = () => {
     const [logs, setLogs] = useState<DeviceLog[]>([]);
     const [devices, setDevices] = useState<Device[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
-    const [searchQuery, setSearchQuery] = useState<string>("");
+    const [selectedDevice, setSelectedDevice] = useState<ExportDeviceOption | null>(null);
 
     const [startDate, setStartDate] = useState<string>("");
     const [endDate, setEndDate] = useState<string>("");
@@ -76,7 +76,10 @@ const LogsTable = () => {
                 sortOrder: sortOrder,
             });
 
-            if (searchQuery) params.append("imei", searchQuery);
+            if (selectedDevice) {
+                params.append("imei", selectedDevice.imei);
+                params.append("deviceName", selectedDevice.deviceName);
+            }
             if (startDate) params.append("startDate", startDate);
             if (endDate) params.append("endDate", endDate);
 
@@ -99,7 +102,7 @@ const LogsTable = () => {
         } finally {
             setLoading(false);
         }
-    }, [page, limit, searchQuery, startDate, endDate, sortBy, sortOrder]);
+    }, [page, limit, selectedDevice, startDate, endDate, sortBy, sortOrder]);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
@@ -118,7 +121,7 @@ const LogsTable = () => {
 
     useEffect(() => {
         setPage(1);
-    }, [searchQuery, startDate, endDate, sortBy, sortOrder]);
+    }, [selectedDevice, startDate, endDate, sortBy, sortOrder]);
 
     useEffect(() => {
         const fetchDevices = async () => {
@@ -408,29 +411,50 @@ const LogsTable = () => {
             {/* بخش فیلترها */}
             <div className="mb-6 mt-4 flex flex-col md:flex-row items-end gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex-1 w-full">
-                    <label className="block text-sm text-gray-600 mb-1">جستجوی IMEI</label>
-                    <input
-                        type="text"
-                        placeholder="IMEI رو وارد کن..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    {/* جایگزین شدن input با Select */}
+                    <Select
+                        placeholder="جستجو و انتخاب دستگاه..."
+                        options={options} // همون آپشن‌هایی که از لیست دستگاه‌ها ساختی
+                        isClearable={true}
+                        isSearchable={true}
+                        // پیدا کردن آبجکت آپشن بر اساس مقدار فعلی searchQuery
+                        value={selectedDevice}
+                        onChange={(selectedOption) => setSelectedDevice(selectedOption as ExportDeviceOption | null)}
+                        noOptionsMessage={() => "دستگاهی پیدا نشد"}
+                        // یه استایل کوچیک که با تم تیلویندت همخونی داشته باشه
+                        styles={{
+                            control: (base) => ({
+                                ...base,
+                                minHeight: '40px',
+                                borderColor: '#d1d5db', // رنگ border-gray-300
+                                boxShadow: 'none',
+                                '&:hover': {
+                                    borderColor: '#9ca3af'
+                                }
+                            }),
+                            menu: (base) => ({
+                                ...base,
+                                zIndex: 50 // برای اینکه زیر بقیه المان‌ها نره
+                            })
+                        }}
                     />
                 </div>
+
                 <div className="flex-1 w-full">
                     <JalaliDatePicker label="از تاریخ" value={startDate} onChange={(val) => setStartDate(val)} />
                 </div>
                 <div className="flex-1 w-full">
                     <JalaliDatePicker label="تا تاریخ" value={endDate} onChange={(val) => setEndDate(val)} />
                 </div>
-                {(searchQuery || startDate || endDate) && (
+
+                {(selectedDevice || startDate || endDate) && (
                     <button
                         onClick={() => {
-                            setSearchQuery("");
+                            setSelectedDevice(null); // ✨ اینجا نال می‌شه
                             setStartDate("");
                             setEndDate("");
                         }}
-                        className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2 rounded-md transition text-sm h-9.5 mb-0.5"
+                        className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2 rounded-md transition text-sm h-[40px] mb-0.5"
                     >
                         پاک کردن فیلترها
                     </button>

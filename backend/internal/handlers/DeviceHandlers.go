@@ -89,10 +89,11 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	pageStr := q.Get("page")
 	limitStr := q.Get("limit")
 	imei := q.Get("imei")
+	deviceName := q.Get("deviceName") // ✨ اضافه شدن دریافت نام دستگاه
 	startDate := q.Get("startDate")
 	endDate := q.Get("endDate")
 
-	// ✨ گرفتن پارامترهای سورت
+	// گرفتن پارامترهای سورت
 	sortBy := q.Get("sortBy")
 	sortOrder := q.Get("sortOrder")
 
@@ -106,18 +107,48 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		limit = l
 	}
 
-	// ساخت شرط‌های داینامیک برای PostgreSQL
 	var conditions []string
 	var args []interface{}
 	paramCount := 1
 
-	if imei != "" {
-		// کست کردن data به text برای سرچ راحت‌تر
-		conditions = append(conditions, fmt.Sprintf("data::text ILIKE $%d", paramCount))
-		args = append(args, "%"+imei+"%")
+	// ✨ لاجیک جدید: جستجو بر اساس ترکیب imei و deviceName
+	if imei != "" && deviceName != "" {
+		var deviceCode string
+
+		// ✨ پیدا کردن device_code از جدول devices بر اساس ترکیب imei و device_name
+		err := database.DB.QueryRow(
+			"SELECT device_code FROM devices WHERE imei = $1 AND device_name = $2",
+			imei, deviceName,
+		).Scan(&deviceCode)
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				// اگه این ترکیب پیدا نشد، یعنی لاگی هم نداره! یه ریسپانس خالی برمی‌گردونیم
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(PaginatedLogsResponse{
+					Logs:        []models.Logs{},
+					CurrentPage: page,
+					TotalPages:  0,
+					TotalLogs:   0,
+				})
+				return
+			}
+			log.Printf("Error fetching device_code for IMEI %s and Name %s: %v", imei, deviceName, err)
+			http.Error(w, "خطای داخلی در اعتبارسنجی دستگاه", http.StatusInternalServerError)
+			return
+		}
+
+		// ✨ حالا با خیال راحت فیلتر می‌زنیم روی customer_id با استفاده از device_code پیدا شده
+		conditions = append(conditions, fmt.Sprintf("data->>'customer_id' = $%d", paramCount))
+		args = append(args, deviceCode)
 		paramCount++
+	} else if imei != "" || deviceName != "" {
+		// ✨ اگه فقط یکی از این دو تا ارسال شده بود و اون یکی خالی بود، می‌تونی ارور بدی چون جفتش برای پیدا کردن کلید یونیک لازمه
+		http.Error(w, "برای جستجوی دستگاه، ارسال هر دو پارامتر IMEI و نام دستگاه الزامی است", http.StatusBadRequest)
+		return
 	}
 
+	// بقیه فیلترها (تاریخ و ...)
 	if startDate != "" {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", paramCount))
 		args = append(args, startDate)
@@ -135,7 +166,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// ۱. کوئری گرفتن تعداد کل رکوردها (برای محاسبه تعداد صفحات)
+	// ۱. کوئری گرفتن تعداد کل رکوردها
 	var totalLogs int
 	countQuery := "SELECT COUNT(*) FROM device_logs " + whereClause
 	err := database.DB.QueryRow(countQuery, args...).Scan(&totalLogs)
@@ -145,20 +176,19 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// محاسبه فرمول‌های صفحه‌بندی
 	totalPages := 0
 	if totalLogs > 0 {
 		totalPages = int((totalLogs + limit - 1) / limit)
 	}
-	offset := int((page - 1) * limit) // فرمول محاسبه آفست
+	offset := int((page - 1) * limit)
 
-	// ✨ ۲. ساختاردهی داینامیک و امن برای ORDER BY
-	orderDirection := "DESC" // پیش‌فرض
+	// ۲. مدیریت سورت
+	orderDirection := "DESC"
 	if strings.ToLower(sortOrder) == "asc" {
 		orderDirection = "ASC"
 	}
 
-	orderColumn := "created_at" // پیش‌فرض
+	orderColumn := "created_at"
 	if sortBy == "imei" {
 		orderColumn = "data->>'IMEI'"
 	} else if sortBy == "created_at" {
@@ -167,7 +197,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 
 	orderByClause := fmt.Sprintf("ORDER BY %s %s", orderColumn, orderDirection)
 
-	// ۳. کوئری گرفتن لاگ‌های همون صفحه با سورت جدید
+	// ۳. کوئری گرفتن لاگ‌های همون صفحه
 	dataQuery := "SELECT id, created_at, data FROM device_logs " + whereClause + " " + orderByClause + fmt.Sprintf(" LIMIT $%d OFFSET $%d", paramCount, paramCount+1)
 	args = append(args, limit, offset)
 
