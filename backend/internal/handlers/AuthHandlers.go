@@ -62,7 +62,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// بقیه کدت همونطوری می‌مونه...
 	if roleName.Valid {
 		user.RoleName = roleName.String
 	} else {

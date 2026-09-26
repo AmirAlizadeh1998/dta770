@@ -16,7 +16,7 @@ func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	// کوئری آپدیت شد: هم role_id رو می‌گیریم، هم اسم نقش رو از جدول roles
 	rows, err := database.DB.Query(`
-		SELECT u.id, u.user_name, u.first_name, u.last_name, u.password, u.mobile, u.role_id, u.status, r.name as role_name
+		SELECT u.id, u.user_name, u.full_name, u.password, u.mobile, u.role_id, u.status, r.name as role_name
 		FROM users u 
 		LEFT JOIN roles r ON u.role_id = r.id
 	`)
@@ -35,15 +35,13 @@ func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var u models.User
-		// lastName رو هم به NullString ها اضافه کردیم
-		var mobile, status, roleName, lastName sql.NullString
+		var mobile, status, roleName sql.NullString
 
 		// اسکن کردن فیلدها به ترتیب SELECT
 		err := rows.Scan(
 			&u.Id,
 			&u.UserName,
 			&u.FirstName,
-			&lastName, // <--- اینجا به جای u.LastName، متغیر موقت رو می‌دیم
 			&u.Password,
 			&mobile,
 			&u.RoleId,
@@ -56,10 +54,6 @@ func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// مقادیر Nullable رو هندل می‌کنیم
-		if lastName.Valid {
-			u.LastName = lastName.String
-		}
 		if mobile.Valid {
 			u.Mobile = mobile.String
 		}
@@ -117,8 +111,8 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// ۳. کوئری اینسرت (ستون role شد role_id)
 	sqlStatement := `
-		INSERT INTO users (user_name, password, mobile, role_id, status, first_name, last_name)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (user_name, password, mobile, role_id, status, full_name)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
 
@@ -131,7 +125,6 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		u.RoleId,    // $4
 		status,      // $5
 		u.FirstName, // $6
-		u.LastName,  // $7
 	).Scan(&u.Id)
 	if err != nil {
 		// اینجا بعداً می‌تونی همون خطای تکراری بودن یوزرنیم (کد 23505) رو که حرفشو زدیم هندل کنی
@@ -184,12 +177,12 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	// کوئری آپدیت (ستون role شد role_id)
 	sqlStatement := `
 		UPDATE users 
-		SET user_name = $1, password = $2, mobile = $3, role_id = $4, status = $5, first_name = $6, last_name = $7
+		SET user_name = $1, password = $2, mobile = $3, role_id = $4, status = $5, full_name = $6
 		WHERE id = $8
 	`
 
 	// پاس دادن u.RoleId به جای role قدیمی
-	res, err := database.DB.Exec(sqlStatement, u.UserName, u.Password, mobile, u.RoleId, status, u.FirstName, u.LastName, idStr)
+	res, err := database.DB.Exec(sqlStatement, u.UserName, u.Password, mobile, u.RoleId, status, u.FirstName, idStr)
 	if err != nil {
 		log.Printf("Error updating user: %v", err)
 		http.Error(w, "خطای داخلی سرور", http.StatusInternalServerError) // کد 500

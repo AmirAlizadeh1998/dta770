@@ -52,8 +52,7 @@ export const UserProfilePage = () => {
                 },
                 // اینجا user_name و password رو هم می‌فرستیم
                 body: JSON.stringify({
-                    first_name: editForm.first_name,
-                    last_name: editForm.last_name,
+                    full_name: editForm.full_name,
                     mobile: editForm.mobile,
                     user_name: editForm.user_name,
                     password: editForm.password // اگه خالی باشه بک‌اند نادیده می‌گیره
@@ -118,24 +117,17 @@ export const UserProfilePage = () => {
             <div className="space-y-4">
                 <div className="flex items-center gap-4">
                     <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-2xl font-bold">
-                        {user.first_name?.charAt(0) || user.user_name?.charAt(0)}
+                        {user.full_name?.charAt(0) || user.user_name?.charAt(0)}
                     </div>
                     <div>
                         {isEditing ? (
                             <div className="flex flex-col gap-2">
                                 <div className="flex gap-2">
                                     <input
-                                        name="first_name"
-                                        value={editForm.first_name || ""}
+                                        name="full_name"
+                                        value={editForm.full_name || ""}
                                         onChange={handleChange}
                                         placeholder="نام"
-                                        className="border rounded px-2 py-1 text-sm"
-                                    />
-                                    <input
-                                        name="last_name"
-                                        value={editForm.last_name || ""}
-                                        onChange={handleChange}
-                                        placeholder="نام خانوادگی"
                                         className="border rounded px-2 py-1 text-sm"
                                     />
                                 </div>
@@ -152,7 +144,7 @@ export const UserProfilePage = () => {
                         ) : (
                             <>
                                 <h3 className="text-xl font-semibold text-gray-900">
-                                    {`${user.first_name || ""} ${user.last_name || ""}`.trim() || "بدون نام"}
+                                    {`${user.full_name}` || "بدون نام"}
                                 </h3>
                                 <p className="text-gray-500" dir="ltr">@{user.user_name}</p>
                             </>

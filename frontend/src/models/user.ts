@@ -3,8 +3,7 @@
 export type User = {
     id: number
     user_name: string
-    first_name: string
-    last_name: string
+    full_name: string
     mobile: string
     role_name: string
     role_id: number
@@ -13,8 +12,7 @@ export type User = {
 
 export type UserFormData = {
     user_name: string
-    first_name: string
-    last_name: string
+    full_name: string
     mobile: string
     password?: string
     role_id: number

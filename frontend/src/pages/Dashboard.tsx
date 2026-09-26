@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState, useMemo } from "react";
 import { jwtDecode } from "jwt-decode";
-import { UserRole } from "../models/consts.ts";
+import { UserRole, type UserRoleType } from "../models/consts.ts";
 import {
     MdAssessment,
     MdDevices,
@@ -11,7 +11,6 @@ import {
     MdMenu,
     MdClose
 } from "react-icons/md";
-// کامپوننت‌های خودت رو اینجا ایمپورت کن...
 import ActiveDevicesView from "./devices/ActiveDevicesView.tsx";
 import DeviceManagePage from "./devices/DeviceManagePage.tsx";
 import UsersListView from "./user/UserListView.tsx";
@@ -22,15 +21,30 @@ import DataAnalyzePage from "./report/DataAnalyzePage.tsx";
 import { UserProfilePage } from "./profile/UserProfilePage.tsx";
 import AiChatPage from "./report/AiChatPage.tsx";
 import type { DeviceMonitorSelection } from "../models/device.ts";
+import DeviceListPage from "./devices/DeviceListPage.tsx";
 
-const menuItems = [
-    // ... دقیقاً همون منوهای خودت ...
+// 1️⃣ تعریف اینترفیس منو با تایپ معتبر رول‌ها
+interface MenuItem {
+    label: string;
+    icon?: React.ReactNode;
+    roles: readonly UserRoleType[] | UserRoleType[];
+    view?: string;
+    children?: {
+        label: string;
+        view: string;
+        roles: readonly UserRoleType[] | UserRoleType[];
+    }[];
+}
+
+// 2️⃣ مشخص کردن تایپ MenuItem[] برای menuItems
+const menuItems: MenuItem[] = [
     {
         label: "دستگاه ها",
         icon: <MdDevices className="text-xl"/>,
         roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER],
         children: [
-            { label: "دستگاه های فعال", view: "devices-active", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER] },
+            { label: "لیست دستگاه ها", view: "devices-list", roles: [UserRole.USER] },
+            { label: "دستگاه های فعال", view: "devices-active", roles: [UserRole.ADMIN, UserRole.INSTALLER] },
             { label: "مدیریت دستگاه ها", view: "devices-manage", roles: [UserRole.ADMIN, UserRole.INSTALLER] },
         ],
     },
@@ -39,7 +53,7 @@ const menuItems = [
         icon: <MdAssessment className="text-xl"/>,
         roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER],
         children: [
-            { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
+            { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT] },
             { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
             { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
             { label: "تحلیل با هوش مصنوعی", view: "analyze-ai", roles: [UserRole.ADMIN] },
@@ -60,28 +74,37 @@ const menuItems = [
         roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER],
         view: "profile",
     }
-]
+];
 
-export function Dashboard() {
-    const [openMenu, setOpenMenu] = useState<number | null>(0)
-    const [activeView, setActiveView] = useState<string>("devices-active")
-    const [activeDevice, setActiveDevice] = useState<DeviceMonitorSelection | null>(null)
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false) // 👈 استیت جدید برای منوی موبایل
-    const navigate = useNavigate()
-
-    let userRole = UserRole.USER;
+// 🛠️ تابع تمیز برای اکسترکت رول معتبر از توکن
+function getUserRoleFromToken(): UserRoleType {
     const token = localStorage.getItem("token");
-
     if (token) {
         try {
             const decodedToken: any = jwtDecode(token);
             if (decodedToken.role) {
-                userRole = decodedToken.role;
+                return decodedToken.role as UserRoleType;
             }
         } catch (error) {
             console.error("داداش توکن مشکل داره یا باز نمیشه:", error);
         }
     }
+    return UserRole.USER;
+}
+
+export function Dashboard() {
+    // 🎯 دریافت رول هنگام اولین رندر
+    const [userRole] = useState<UserRoleType>(() => getUserRoleFromToken());
+
+    // 🎯 مقداردهی صفحه پیش‌فرض: اگه یوزر عادی بود میره لیست، بقیه فعال
+    const [activeView, setActiveView] = useState<string>(() => {
+        return userRole === UserRole.USER ? "devices-list" : "devices-active";
+    });
+
+    const [openMenu, setOpenMenu] = useState<number | null>(0)
+    const [activeDevice, setActiveDevice] = useState<DeviceMonitorSelection | null>(null)
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+    const navigate = useNavigate()
 
     const filteredMenu = useMemo(() => {
         return menuItems
@@ -121,12 +144,11 @@ export function Dashboard() {
 
     const handleMenuClick = (view: string) => {
         setActiveView(view)
-        setIsMobileMenuOpen(false) // 👈 بعد از انتخاب، منوی موبایل بسته بشه
+        setIsMobileMenuOpen(false) // بستن منو در موبایل پس از انتخاب ویو
     }
 
     useEffect(() => {
         const handler = (e: any) => {
-            // رویدادهای قدیمی فقط IMEI می‌فرستادند؛ رویداد جدید نام و IMEI را با هم می‌فرستد.
             if (typeof e.detail === "string") {
                 setActiveDevice({ deviceName: "", imei: e.detail })
             } else if (e.detail?.imei) {
@@ -151,7 +173,6 @@ export function Dashboard() {
     }, [activeView, filteredMenu])
 
     function renderContent() {
-        // ... (دقیقاً همون کد قبلی رندر محتوا)
         let currentViewConfig = null;
         for (const m of menuItems) {
             if (m.view === activeView) {
@@ -177,6 +198,7 @@ export function Dashboard() {
         }
 
         switch (activeView) {
+            case "devices-list": return <DeviceListPage />
             case "devices-active": return <ActiveDevicesView />
             case "devices-manage": return <DeviceManagePage />
             case "users-list": return <UsersListView />
@@ -198,7 +220,7 @@ export function Dashboard() {
     return (
         <div dir="rtl" className="flex flex-col md:flex-row min-h-screen bg-gray-50 relative">
 
-            {/* هدر مخصوص موبایل (فقط تو صفحات کوچیک نشون داده میشه) */}
+            {/* هدر موبایل */}
             <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 shadow-sm z-20">
                 <h2 className="text-xl font-bold text-gray-800">داشبورد</h2>
                 <button
@@ -209,7 +231,7 @@ export function Dashboard() {
                 </button>
             </header>
 
-            {/* بک‌گراند تاریک پشت منو تو حالت موبایل */}
+            {/* Backdrop منوی موبایل */}
             {isMobileMenuOpen && (
                 <div
                     className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -217,7 +239,7 @@ export function Dashboard() {
                 />
             )}
 
-            {/* سایدبار */}
+            {/* سایدبار ناوبری */}
             <aside className={`
                 fixed inset-y-0 right-0 z-50 w-64 bg-white border-l border-gray-200 shadow-sm flex flex-col
                 transform transition-transform duration-300 ease-in-out
@@ -227,7 +249,6 @@ export function Dashboard() {
                 <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-800">داشبورد</h2>
                     <div className="flex items-center gap-2">
-                        {/* دکمه بستن منو در موبایل */}
                         <button
                             className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-full"
                             onClick={() => setIsMobileMenuOpen(false)}
@@ -309,7 +330,7 @@ export function Dashboard() {
                 </nav>
             </aside>
 
-            {/* بخش محتوای اصلی */}
+            {/* محتوای صفحات */}
             <main className="flex-1 p-4 sm:p-8 overflow-auto h-[calc(100vh-64px)] md:h-screen">
                 {renderContent()}
             </main>

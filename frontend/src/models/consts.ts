@@ -254,3 +254,4 @@ export const UserRole = {
     REPORT: "Report",
     USER: "User",
 } as const;
+export type UserRoleType = typeof UserRole[keyof typeof UserRole];

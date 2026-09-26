@@ -14,8 +14,7 @@ export default function UserFormModal({ open, onClose, onSubmit, editingUser, ro
     const [form, setForm] = useState<UserFormData>({
         role_id: 0,
         user_name: "",
-        first_name: "",
-        last_name: "",
+        full_name: "",
         mobile: "",
         password: "",
         status: "active"
@@ -26,8 +25,7 @@ export default function UserFormModal({ open, onClose, onSubmit, editingUser, ro
             setForm({
                 role_id: editingUser.role_id,
                 user_name: editingUser.user_name,
-                first_name: editingUser.first_name,
-                last_name: editingUser.last_name,
+                full_name: editingUser.full_name,
                 mobile: editingUser.mobile,
                 password: "",
                 status: editingUser.status
@@ -36,8 +34,7 @@ export default function UserFormModal({ open, onClose, onSubmit, editingUser, ro
             setForm({
                 role_id: 0,
                 user_name: "",
-                first_name: "",
-                last_name: "",
+                full_name: "",
                 mobile: "",
                 password: "",
                 status: "active"
@@ -63,7 +60,7 @@ export default function UserFormModal({ open, onClose, onSubmit, editingUser, ro
 
                     <input
                         type="text"
-                        placeholder="نام کاربری (User Name)"
+                        placeholder="نام کاربری"
                         value={form.user_name}
                         onChange={(e) => setForm({ ...form, user_name: e.target.value })}
                         className="w-full border rounded-lg px-3 py-2"
@@ -72,19 +69,11 @@ export default function UserFormModal({ open, onClose, onSubmit, editingUser, ro
 
                     <input
                         type="text"
-                        placeholder="نام"
-                        value={form.first_name}
-                        onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                        placeholder="نام و نام خانوادگی"
+                        value={form.full_name}
+                        onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                         className="w-full border rounded-lg px-3 py-2"
                         required
-                    />
-
-                    <input
-                        type="text"
-                        placeholder="نام خانوادگی"
-                        value={form.last_name}
-                        onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
                     />
 
                     <input

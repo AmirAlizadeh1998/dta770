@@ -32,8 +32,7 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	// ----------------------------------------------------
 	if r.Method == http.MethodPut {
 		var updateReq struct {
-			FirstName string `json:"first_name"`
-			LastName  string `json:"last_name"`
+			FirstName string `json:"full_name"`
 			Mobile    string `json:"mobile"`
 			UserName  string `json:"user_name"` // اضافه شد
 			Password  string `json:"password"`  // اضافه شد
@@ -55,12 +54,12 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// کوئری با پسورد
-			updateQuery := `UPDATE users SET first_name = $1, last_name = $2, mobile = $3, user_name = $4, password = $5 WHERE id = $6`
-			_, err = database.DB.Exec(updateQuery, updateReq.FirstName, updateReq.LastName, updateReq.Mobile, updateReq.UserName, string(hashedPassword), userID)
+			updateQuery := `UPDATE users SET full_name = $1, mobile = $2, user_name = $3, password = $4 WHERE id = $5`
+			_, err = database.DB.Exec(updateQuery, updateReq.FirstName, updateReq.Mobile, updateReq.UserName, string(hashedPassword), userID)
 		} else {
 			// کوئری بدون پسورد (رمز قبلی حفظ میشه)
-			updateQuery := `UPDATE users SET first_name = $1, last_name = $2, mobile = $3, user_name = $4 WHERE id = $5`
-			_, err = database.DB.Exec(updateQuery, updateReq.FirstName, updateReq.LastName, updateReq.Mobile, updateReq.UserName, userID)
+			updateQuery := `UPDATE users SET full_name = $1, mobile = $2, user_name = $3 WHERE id = $4`
+			_, err = database.DB.Exec(updateQuery, updateReq.FirstName, updateReq.Mobile, updateReq.UserName, userID)
 		}
 
 		if err != nil {
@@ -74,11 +73,11 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	// ----------------------------------------------------
 
 	var user models.User
-	var firstName, lastName, mobile sql.NullString // موبایل هم ممکنه Null باشه
+	var firstName, mobile sql.NullString // موبایل هم ممکنه Null باشه
 
 	// استفاده از JOIN برای گرفتن اسم نقش (role_name)
 	query := `
-		SELECT u.id, u.first_name, u.last_name, u.user_name, u.mobile, u.status, r.name as role_name 
+		SELECT u.id, u.full_name, u.user_name, u.mobile, u.status, r.name as role_name 
 		FROM users u
 		LEFT JOIN roles r ON u.role_id = r.id
 		WHERE u.id = $1`
@@ -86,7 +85,6 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	err := database.DB.QueryRow(query, userID).Scan(
 		&user.Id,
 		&firstName,
-		&lastName,
 		&user.UserName,
 		&mobile,      // اضافه شد
 		&user.Status, // اضافه شد (اگه تو مدل داری)
@@ -106,9 +104,6 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	// هندل کردن Null ها
 	if firstName.Valid {
 		user.FirstName = firstName.String
-	}
-	if lastName.Valid {
-		user.LastName = lastName.String
 	}
 	if mobile.Valid {
 		user.Mobile = mobile.String

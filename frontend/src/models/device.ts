@@ -1,10 +1,13 @@
 export interface Device {
     id: number;
+    created_at: string;
     imei: string;
     device_code: string;
     device_name: string;
+    owner_name: string;
     start_time: string;
     end_time: string;
+    is_active: boolean;
 }
 
 export interface DeviceMonitorSelection {

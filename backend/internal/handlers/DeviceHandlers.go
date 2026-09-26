@@ -386,15 +386,37 @@ func extractDeviceID(path string) (int, error) {
 }
 
 func handleGetDevices(w http.ResponseWriter, r *http.Request) {
-	rows, err := database.DB.Query(`
+	// ۱. استخراج اطلاعات کاربر از توکن (Context)
+	// نکته: این خطوط رو بر اساس سیستم احراز هویت (Middleware) خودت تنظیم کن
+	// مثلاً ممکنه اسم کلیدها توی کانتکستت فرق کنه یا متد دیگه‌ای برای گرفتنشون داشته باشی
+	userID := r.Context().Value("user_id") // آیدی کاربر
+	role := r.Context().Value("userRole")  // نقش کاربر (مثلاً "admin" یا "user")
+
+	// ۲. کوئری پایه بدون شرط
+	baseQuery := `
 		SELECT 
 			id, device_name, device_code, owner_name, imei, phone, address,
 			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 			distance_from_trans, cable_size, three_phase, materials,
 			description, is_active, start_time, end_time, alarm, deactivated_at
 		FROM devices
-		ORDER BY id DESC
-	`)
+	`
+
+	var rows *sql.Rows
+	var err error
+
+	// ۳. داینامیک کردن کوئری بر اساس نقش کاربر
+	if role == "Admin" {
+		// اگه ادمین بود، همه رو نشون بده
+		query := baseQuery + " ORDER BY id DESC"
+		rows, err = database.DB.Query(query)
+	} else {
+		// اگه کاربر عادی بود، فقط دستگاه‌هایی که user_id شون برابر آیدی خودشه رو بیار
+		query := baseQuery + " WHERE user_id = $1 ORDER BY id DESC"
+		// ⚠️ توجه: اگه از PostgreSQL استفاده می‌کنی به جای ؟ باید از 1$ استفاده کنی
+		rows, err = database.DB.Query(query, userID)
+	}
+
 	if err != nil {
 		log.Printf("Error querying devices: %v", err)
 		http.Error(w, "خطا در دریافت دستگاه‌ها", http.StatusInternalServerError)
@@ -409,6 +431,7 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		var startTime, endTime, deactivatedAt sql.NullTime
 		var alarm, deviceCode sql.NullString
 
+		// اسکن کردن دقیقاً مثل کدهای خودت...
 		err := rows.Scan(
 			&d.Id,
 			&d.DeviceName,
@@ -444,19 +467,15 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		if startTime.Valid {
 			d.StartTime = startTime.Time.Format(time.RFC3339)
 		}
-
 		if endTime.Valid {
 			d.EndTime = endTime.Time.Format(time.RFC3339)
 		}
-
 		if alarm.Valid {
 			d.Alarm = alarm.String
 		}
-
 		if deviceCode.Valid {
 			d.DeviceCode = deviceCode.String
 		}
-
 		if deactivatedAt.Valid {
 			d.DeactivatedAt = deactivatedAt.Time.Format(time.RFC3339)
 		}
@@ -474,6 +493,7 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		devices = []models.Device{}
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(devices); err != nil {
 		log.Printf("Error encoding devices response: %v", err)
 	}
@@ -486,12 +506,15 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	var d models.Device
 
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
+		log.Printf("❌ JSON Decode Error: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{
 			"message": "فرمت داده‌ها نامعتبر است",
 		})
 		return
 	}
+
+	log.Printf("Received Device: %+v", d)
 
 	// 🔍 بررسی اینکه آیا دستگاه فعالی با همین IMEI در دیتابیس وجود دارد یا نه
 	var activeCount int
@@ -516,20 +539,21 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 
 	// اگر دستگاه فعالی وجود نداشت، میریم سراغ ثبت
 	query := `
-		INSERT INTO devices (
-			device_name, owner_name, imei, start_time, end_time, phone, address,
-			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
-			distance_from_trans, cable_size, three_phase, materials,
-			description, is_active, device_code, deactivated_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11, $12, $13, $14,
-			$15, $16, $17, $18,
-			$19, $20, 
-            CASE WHEN $19 = false THEN CURRENT_TIMESTAMP ELSE NULL END
-		)
-		RETURNING id
-	`
+			INSERT INTO devices (
+				device_name, owner_name, imei, start_time, end_time, phone, address,
+				fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
+				distance_from_trans, cable_size, three_phase, materials,
+				description, is_active, device_code, deactivated_at, user_id
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8,
+				$9, $10, $11, $12, $13, $14,
+				$15, $16, $17, $18,
+				$19, $20, 
+				CASE WHEN $19 = false THEN CURRENT_TIMESTAMP END,
+				$21
+			)
+			RETURNING id
+		`
 
 	var newID int
 
@@ -555,9 +579,19 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		d.Description,
 		d.IsActive,
 		d.DeviceCode,
+		d.UserID, // پوینتر به int64 تا در صورت nil بودن، NULL ذخیره شود
 	).Scan(&newID)
 
 	if err != nil {
+		// بررسی خطای Foreign Key (کد 23503 در Postgres - کاربر پیدا نشد)
+		if strings.Contains(err.Error(), "23503") {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "کاربر انتخاب‌شده در سیستم معتبر نیست! 👤🚫",
+			})
+			return
+		}
+
 		// چک کردن ارورهای تکراری بودن مقادیر (Postgres Error Code: 23505)
 		if strings.Contains(err.Error(), "23505") {
 			w.WriteHeader(http.StatusConflict) // 409 Conflict
@@ -662,8 +696,9 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 			updated_at = $19,
 			alarm = $20,
 			owner_name = $21,
-			device_code = $22 
-		WHERE id = $23     
+			device_code = $22,
+			user_id = $23
+		WHERE id = $24     
 	`
 
 	result, err := database.DB.Exec(
@@ -690,10 +725,20 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		d.Alarm,
 		d.OwnerName,
 		d.DeviceCode,
-		id,
+		d.UserID, // این فیلد پوینتر هست (*int64 یا *int) تا در صورت null بودن، NULL ذخیره بشه
+		id,       // شرط WHERE id = $24
 	)
 
 	if err != nil {
+		// بررسی خطای Foreign Key (کد 23503 در Postgres - کاربر پیدا نشد)
+		if strings.Contains(err.Error(), "23503") {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "کاربر انتخاب‌شده در سیستم معتبر نیست! 👤🚫",
+			})
+			return
+		}
+
 		// بررسی خطای Unique Constraint (کد 23505 در Postgres)
 		if strings.Contains(err.Error(), "23505") {
 			w.WriteHeader(http.StatusConflict) // کد 409

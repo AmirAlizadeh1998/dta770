@@ -1,8 +1,7 @@
 // pages/UserListPage.tsx
 
-import { useMemo, useState } from "react";
-import type { User } from "../../models/user.ts";
-import type { Role } from "../../models/user.ts";
+import {useMemo, useState} from "react";
+import type {Role, User} from "../../models/user.ts";
 
 interface UserListPageProps {
     users?: User[];
@@ -34,8 +33,7 @@ function UserListPage({
             const matchSearch =
                 !q ||
                 u.user_name?.toLowerCase().includes(q) ||
-                u.first_name?.toLowerCase().includes(q) ||
-                u.last_name?.toLowerCase().includes(q) ||
+                u.full_name?.toLowerCase().includes(q) ||
                 u.mobile?.toLowerCase().includes(q);
 
             // حالا با role_id فیلتر می‌کنیم
@@ -62,7 +60,7 @@ function UserListPage({
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder= "جستجو بر اساس نام، نام کاربری یا موبایل..."
+                    placeholder="جستجو بر اساس نام، نام کاربری یا موبایل..."
                     className="flex-1 min-w-55 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
 
@@ -96,7 +94,7 @@ function UserListPage({
             ) : error ? (
                 <div className="py-10 text-center text-red-500">{error}</div>
             ) : filtered.length === 0 ? (
-                <div className="py-10 text-center text-gray-400">کاربری پیدا نشد 🤷</div>
+                <div className="py-10 text-center text-gray-400">کاربری پیدا نشد</div>
             ) : (
                 <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="w-full text-center text-sm">
@@ -114,13 +112,12 @@ function UserListPage({
                             return (
                                 <tr key={u.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-3">
-                                        <div className="font-medium text-gray-900">
-                                            {`${u.first_name || ""} ${u.last_name || ""}`.trim()}
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                            <span dir="ltr">@{u.user_name}</span>
-                                        </div>
+                                        <div className="font-medium text-gray-800">{u.full_name || "بدون نام"}</div>
+                                        {u.user_name && (
+                                            <div className="text-xs text-gray-400 dir-ltr">{u.user_name}@</div>
+                                        )}
                                     </td>
+
                                     <td className="px-4 py-3 text-gray-600">{u.mobile}</td>
                                     <td className="px-4 py-3">{u.role_name || "نامشخص"}</td>
                                     <td className="px-4 py-3">

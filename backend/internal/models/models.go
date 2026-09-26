@@ -8,8 +8,7 @@ import (
 type User struct {
 	Id        int    `json:"id"`
 	UserName  string `json:"user_name"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	FirstName string `json:"full_name"`
 	Password  string `json:"password"`
 	Mobile    string `json:"mobile"`
 	RoleId    int    `json:"role_id"`
@@ -47,6 +46,19 @@ type Device struct {
 	EndTime           string `json:"end_time"`
 	LastSeenAt        string `json:"last_seen_at"`
 	Alarm             string `json:"alarm"`
+	UserID            *int64 `json:"user_id"`
+}
+
+type DeviceResponse struct {
+	ID         int64      `json:"id"`
+	DeviceName string     `json:"device_name"`
+	IMEI       string     `json:"imei"`
+	DeviceCode string     `json:"device_code"`
+	OwnerName  string     `json:"owner_name"`
+	UserID     *int64     `json:"user_id"`
+	IsActive   bool       `json:"is_active"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  *time.Time `json:"updated_at"`
 }
 
 type Logs struct {

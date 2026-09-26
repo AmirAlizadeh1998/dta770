@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useMemo } from "react"
 import JalaliDatePicker from "../../components/JalaliDatePicker.tsx"
+import { FormatToJalali } from "../../utils/Formatters.ts"
+import { UserRole } from "../../models/consts.ts"
+import { jwtDecode } from "jwt-decode"
+import UserFormModal from "../../components/UserFormModal.tsx"
+import type { Role, UserFormData } from "../../models/user"
 
-import {FormatToJalali} from "../../utils/Formatters.ts";
-import { UserRole } from "../../models/consts.ts";
-import {jwtDecode} from "jwt-decode";
+type UserItem = {
+    id: number | string
+    full_name?: string
+    username?: string
+    phone?: string
+    company_name?: string
+}
 
 type Device = {
     id: number | string
+    user_id?: number | string | null
     device_name: string
     device_code: string
     owner_name: string
@@ -27,7 +37,6 @@ type Device = {
     materials?: string
     description?: string
     is_active: boolean
-    // آبجکت آلارم که از دیتابیس میاد
     alarm?: {
         line_to_line_upper?: string | null
         line_to_line_lower?: string | null
@@ -37,6 +46,7 @@ type Device = {
 }
 
 type DeviceForm = {
+    userId: number | string
     deviceName: string
     ownerName: string
     deviceCode: string
@@ -61,20 +71,36 @@ type DeviceForm = {
     lineToLineLower: string
     lineToPhaseUpper: string
     lineToPhaseLower: string
-    // استیت‌های جدید برای کنترل چک‌باکس ولتاژها
     enableLineToLine: boolean
     enableLineToNull: boolean
 }
 
 const initialForm: DeviceForm = {
-    deviceName: "", ownerName: "", deviceCode: "", imei: "", startTime: "", endTime: "",
-    phone: "", address: "",
-    distanceFromTrans: "", cableSize: "", threePhase: false,
-    materials: "", description: "", isActive: true,
-    fuseBox: false, nullConnection: false, fuseComb: false,
-    lineBalance: false, unitEarth: false, upsBattery: false,
-    lineToLineUpper: "", lineToLineLower: "",
-    lineToPhaseUpper: "", lineToPhaseLower: "",
+    userId: "",
+    deviceName: "",
+    ownerName: "",
+    deviceCode: "",
+    imei: "",
+    startTime: "",
+    endTime: "",
+    phone: "",
+    address: "",
+    distanceFromTrans: "",
+    cableSize: "",
+    threePhase: false,
+    materials: "",
+    description: "",
+    isActive: true,
+    fuseBox: false,
+    nullConnection: false,
+    fuseComb: false,
+    lineBalance: false,
+    unitEarth: false,
+    upsBattery: false,
+    lineToLineUpper: "",
+    lineToLineLower: "",
+    lineToPhaseUpper: "",
+    lineToPhaseLower: "",
     enableLineToLine: false,
     enableLineToNull: false,
 }
@@ -124,8 +150,10 @@ export default function DeviceManagePage() {
     const [form, setForm] = useState<DeviceForm>(initialForm)
     const [errors, setErrors] = useState<Partial<Record<keyof DeviceForm, string>>>({})
     const [devices, setDevices] = useState<Device[]>([])
-
+    const [users, setUsers] = useState<UserItem[]>([])
+    const [roles, setRoles] = useState<Role[]>([])
     const [editingId, setEditingId] = useState<number | string | null>(null)
+    const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
 
     const fetchDevices = async () => {
         try {
@@ -136,16 +164,46 @@ export default function DeviceManagePage() {
             if (response.ok) {
                 const data = await response.json()
                 setDevices(data.data || data || [])
-            } else {
-                console.error("سرور ارور داد:", response.status)
             }
         } catch (error) {
             console.error("خطا در دریافت لیست دستگاه‌ها:", error)
         }
     }
 
+    const fetchUsers = async () => {
+        try {
+            const token = localStorage.getItem("token")
+            const response = await fetch("/api/users", {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (response.ok) {
+                const data = await response.json()
+                setUsers(data.data || data || [])
+            }
+        } catch (error) {
+            console.error("خطا در دریافت لیست کاربران:", error)
+        }
+    }
+
+    const fetchRoles = async () => {
+        try {
+            const token = localStorage.getItem("token")
+            const response = await fetch("/api/roles", {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (response.ok) {
+                const data = await response.json()
+                setRoles(data.data || data || [])
+            }
+        } catch (error) {
+            console.error("خطا در دریافت لیست نقش‌ها:", error)
+        }
+    }
+
     useEffect(() => {
         fetchDevices()
+        fetchUsers()
+        fetchRoles()
     }, [])
 
     const validate = (): boolean => {
@@ -155,14 +213,12 @@ export default function DeviceManagePage() {
         const trimmedDeviceCode = form.deviceCode.trim()
 
         if (!trimmedName) e.deviceName = "نام دستگاه اجباری است"
-        if (!form.ownerName.trim()) e.ownerName = "نام مالک اجباری است"
         if (!trimmedDeviceCode) {
             e.deviceCode = "کد دستگاه اجباری است"
         } else {
             const isDeviceCodeDuplicate = devices.some(
                 (d) => d.id !== editingId && d.device_code === trimmedDeviceCode
             )
-
             if (isDeviceCodeDuplicate) {
                 e.deviceCode = "این کد دستگاه قبلاً ثبت شده است"
             }
@@ -174,7 +230,6 @@ export default function DeviceManagePage() {
             e.imei = "IMEI باید ۱۵ رقم باشد"
         }
 
-        // چک تکراری بودن ترکیب Name + IMEI در کلاینت (به جز رکوردی که در حال ویرایش است)
         if (trimmedName && trimmedImei) {
             const isDuplicate = devices.some(
                 (d) =>
@@ -182,7 +237,6 @@ export default function DeviceManagePage() {
                     d.device_name.toLowerCase() === trimmedName.toLowerCase() &&
                     d.imei === trimmedImei
             )
-
             if (isDuplicate) {
                 e.deviceName = "ترکیب نام و IMEI تکراری است"
                 e.imei = "ترکیب نام و IMEI تکراری است"
@@ -193,11 +247,73 @@ export default function DeviceManagePage() {
         return Object.keys(e).length === 0
     }
 
-    const handleChange = (key: keyof DeviceForm, value: string | boolean) => {
+    const handleChange = (key: keyof DeviceForm, value: any) => {
         setForm((prev) => ({ ...prev, [key]: value }))
-        // پاک کردن ارور فیلد موقع ویرایش کاربر
         if (errors[key]) {
             setErrors((prev) => ({ ...prev, [key]: undefined }))
+        }
+    }
+
+    // تغییر کاربر از سلکت‌باکس
+    const handleUserSelect = (userIdValue: string) => {
+        if (!userIdValue) {
+            setForm((prev) => ({ ...prev, userId: "", ownerName: "" }))
+            return
+        }
+        const selectedUser = users.find((u) => String(u.id) === userIdValue)
+        setForm((prev) => ({
+            ...prev,
+            userId: userIdValue,
+            ownerName: selectedUser?.full_name || selectedUser?.username || "",
+            phone: prev.phone || selectedUser?.phone || ""
+        }))
+    }
+
+    // هندلر ثبت کاربر از طریق UserFormModal
+    const handleCreateUserFromModal = async (userData: UserFormData) => {
+        try {
+            const token = localStorage.getItem("token")
+            const response = await fetch("/api/users", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(userData),
+            })
+
+            const resData = await response.json()
+            if (response.ok) {
+                const createdUser = resData.data || resData
+
+                // ساخت آبجکت کاربر جدید برای لیست محلی
+                const fullName = `${userData.full_name}`.trim() || userData.user_name
+                const newUserItem: UserItem = {
+                    id: createdUser.id,
+                    full_name: fullName,
+                    username: userData.user_name,
+                    phone: userData.mobile,
+                }
+
+                // اضافه کردن به لیست سلکت‌باکس
+                setUsers((prev) => [...prev, newUserItem])
+
+                // انتخاب مستقیم به عنوان مالک دستگاه جاری
+                setForm((prev) => ({
+                    ...prev,
+                    userId: String(createdUser.id),
+                    ownerName: fullName,
+                    phone: prev.phone || userData.mobile || ""
+                }))
+
+                setIsAddUserModalOpen(false)
+                alert("کاربر جدید با موفقیت ثبت و به عنوان مالک انتخاب شد.")
+            } else {
+                alert(resData.message || "خطا در ثبت کاربر جدید")
+            }
+        } catch (err) {
+            console.error("خطا در ایجاد کاربر:", err)
+            alert("خطا در برقراری ارتباط با سرور")
         }
     }
 
@@ -205,17 +321,16 @@ export default function DeviceManagePage() {
         e.preventDefault()
 
         if (editingId && !canEdit) {
-            alert("شما مجاز به ویرایش نمی‌باشید! 🚫");
-            return;
+            alert("شما مجاز به ویرایش نمی‌باشید! 🚫")
+            return
         }
 
         if (form.startTime && form.endTime) {
-            const start = new Date(form.startTime).getTime();
-            const end = new Date(form.endTime).getTime();
-
+            const start = new Date(form.startTime).getTime()
+            const end = new Date(form.endTime).getTime()
             if (end <= start) {
-                alert("تاریخ و ساعت پایان باید حتماً بعد از تاریخ شروع باشد!");
-                return;
+                alert("تاریخ و ساعت پایان باید حتماً بعد از تاریخ شروع باشد!")
+                return
             }
         }
         if (!validate()) return
@@ -239,6 +354,7 @@ export default function DeviceManagePage() {
                     Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
+                    user_id: form.userId ? Number(form.userId) : null,
                     device_name: form.deviceName,
                     owner_name: form.ownerName,
                     device_code: form.deviceCode,
@@ -267,41 +383,22 @@ export default function DeviceManagePage() {
             const data = await response.json()
 
             if (!response.ok) {
-                console.error(data.message || "خطا در ذخیره اطلاعات")
                 alert(data.message || "خطایی رخ داده است ❌")
-
-                // مدیریت دقیق خطاهای 409 (Conflict)
                 if (response.status === 409) {
                     const msg = data.message || ""
-
                     if (msg.includes("کد دستگاه")) {
-                        setErrors((prev) => ({
-                            ...prev,
-                            deviceCode: "این کد دستگاه قبلاً در دیتابیس ثبت شده است",
-                        }))
+                        setErrors((prev) => ({ ...prev, deviceCode: "این کد دستگاه قبلاً در دیتابیس ثبت شده است" }))
                     } else if (msg.includes("دستگاه فعال دیگر") || msg.includes("فعال")) {
-                        // 👈 خطای وجود دستگاه فعال با همین IMEI
-                        setErrors((prev) => ({
-                            ...prev,
-                            imei: "یک دستگاه فعال دیگر با این IMEI وجود دارد!",
-                        }))
+                        setErrors((prev) => ({ ...prev, imei: "یک دستگاه فعال دیگر با این IMEI وجود دارد!" }))
                     } else if (msg.includes("ترکیب") || msg.includes("نام و IMEI")) {
-                        // خطای یونیک بودن ترکیب نام و IMEI
                         setErrors((prev) => ({
                             ...prev,
                             deviceName: "ترکیب این نام و IMEI تکراری است",
                             imei: "ترکیب این نام و IMEI تکراری است",
                         }))
-                    } else {
-                        // در صورتی که پیام دیگه‌ای بود
-                        setErrors((prev) => ({
-                            ...prev,
-                            imei: msg,
-                        }))
                     }
                 }
-
-                return // 👈 جلوی ادامه عملیات گرفته میشه
+                return
             }
 
             alert(data.message || "با موفقیت ثبت شد!")
@@ -315,7 +412,7 @@ export default function DeviceManagePage() {
     }
 
     const handleDelete = async (id: number | string) => {
-        if (!window.confirm("رفیق، مطمئنی میخوای این دستگاه رو حذف کنی؟")) return;
+        if (!window.confirm("رفیق، مطمئنی میخوای این دستگاه رو حذف کنی؟")) return
 
         try {
             const token = localStorage.getItem("token")
@@ -325,58 +422,75 @@ export default function DeviceManagePage() {
             })
 
             if (response.ok) {
-                alert("دستگاه با موفقیت حذف شد.");
-                fetchDevices();
-
+                alert("دستگاه با موفقیت حذف شد.")
+                fetchDevices()
                 if (editingId === id) {
-                    setForm(initialForm);
-                    setEditingId(null);
+                    setForm(initialForm)
+                    setEditingId(null)
                 }
             } else {
-                alert("خطا در حذف دستگاه");
+                alert("خطا در حذف دستگاه")
             }
         } catch (error) {
-            console.error("خطا:", error);
-            alert("مشکلی در ارتباط با سرور پیش اومد.");
+            console.error("خطا:", error)
+            alert("مشکلی در ارتباط با سرور پیش اومد.")
         }
     }
 
     const handleEditClick = (device: Device) => {
-        setEditingId(device.id);
+        setEditingId(device.id)
 
-        let parsedAlarm: any = {};
-        if (device.alarm) {
-            if (typeof device.alarm === 'string') {
-                try {
-                    parsedAlarm = JSON.parse(device.alarm);
-                } catch (e) {
-                    console.error("خطا در پارس کردن جیسون آلارم", e);
-                }
-            } else {
-                parsedAlarm = device.alarm;
+        let matchedUserId = ""
+        const rawUserId = device.user_id ?? (device as any).userId
+
+        if (rawUserId) {
+            matchedUserId = String(rawUserId)
+        } else if (device.owner_name) {
+            const matchedUser = users.find(
+                (u) =>
+                    (u.full_name && u.full_name.trim().toLowerCase() === device.owner_name.trim().toLowerCase()) ||
+                    (u.username && u.username.trim().toLowerCase() === device.owner_name.trim().toLowerCase())
+            )
+            if (matchedUser) {
+                matchedUserId = String(matchedUser.id)
             }
         }
 
-        // یه تابع کمکی مینویسیم که اگه null یا undefined بود، رشته خالی برگردونه
-        const safeString = (val: any) => (val !== null && val !== undefined ? String(val) : "");
+        const selectedUser = users.find((u) => String(u.id) === matchedUserId)
+        const finalOwnerName = device.owner_name || selectedUser?.full_name || selectedUser?.username || ""
 
-        const l2lUpper = parsedAlarm?.line_to_line_upper;
-        const l2lLower = parsedAlarm?.line_to_line_lower;
-        const l2nUpper = parsedAlarm?.line_to_null_upper ?? parsedAlarm?.line_to_phase_upper;
-        const l2nLower = parsedAlarm?.line_to_null_lower ?? parsedAlarm?.line_to_phase_lower;
+        let parsedAlarm: any = {}
+        if (device.alarm) {
+            if (typeof device.alarm === "string") {
+                try {
+                    parsedAlarm = JSON.parse(device.alarm)
+                } catch (e) {
+                    console.error("خطا در پارس آلارم", e)
+                }
+            } else {
+                parsedAlarm = device.alarm
+            }
+        }
 
-        // اگه حداقل یکیشون مقدار معتبر داشته باشه، چک‌باکس فعال میشه
-        const hasLineToLine = (l2lUpper !== null && l2lUpper !== undefined) || (l2lLower !== null && l2lLower !== undefined);
-        const hasLineToNull = (l2nUpper !== null && l2nUpper !== undefined) || (l2nLower !== null && l2nLower !== undefined);
+        const safeString = (val: any) => (val !== null && val !== undefined ? String(val) : "")
+
+        const l2lUpper = parsedAlarm?.line_to_line_upper
+        const l2lLower = parsedAlarm?.line_to_line_lower
+        const l2nUpper = parsedAlarm?.line_to_null_upper ?? parsedAlarm?.line_to_phase_upper
+        const l2nLower = parsedAlarm?.line_to_null_lower ?? parsedAlarm?.line_to_phase_lower
+
+        const hasLineToLine = (l2lUpper !== null && l2lUpper !== undefined) || (l2lLower !== null && l2lLower !== undefined)
+        const hasLineToNull = (l2nUpper !== null && l2nUpper !== undefined) || (l2nLower !== null && l2nLower !== undefined)
 
         setForm({
+            userId: matchedUserId,
             deviceName: device.device_name || "",
-            ownerName: device.owner_name || "بدون مالک مشخص",
+            ownerName: finalOwnerName,
             imei: device.imei || "",
             deviceCode: device.device_code || "",
             startTime: device.start_time || "",
             endTime: device.end_time || "",
-            phone: device.phone || "",
+            phone: device.phone || selectedUser?.phone || "",
             address: device.address || "",
             distanceFromTrans: device.distance_from_trans || "",
             cableSize: device.cable_size || "",
@@ -390,66 +504,89 @@ export default function DeviceManagePage() {
             lineBalance: device.line_balance || false,
             unitEarth: device.unit_earth || false,
             upsBattery: device.ups_battery || false,
-
-            // استفاده از تابع کمکی برای جلوگیری از چاپ شدن کلمه "null"
             lineToLineUpper: safeString(l2lUpper),
             lineToLineLower: safeString(l2lLower),
             lineToPhaseUpper: safeString(l2nUpper),
             lineToPhaseLower: safeString(l2nLower),
             enableLineToLine: hasLineToLine,
             enableLineToNull: hasLineToNull,
-        });
+        })
 
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: "smooth" })
     }
 
     const handleCancelEdit = () => {
-        setForm(initialForm);
-        setEditingId(null);
-        setErrors({});
+        setForm(initialForm)
+        setEditingId(null)
+        setErrors({})
     }
 
     const userRole = useMemo(() => {
-        const token = localStorage.getItem("token");
-        if (!token) return UserRole.USER;
+        const token = localStorage.getItem("token")
+        if (!token) return UserRole.USER
         try {
-            const decoded: any = jwtDecode(token);
-            return decoded.role ?? UserRole.USER;
+            const decoded: any = jwtDecode(token)
+            return decoded.role ?? UserRole.USER
         } catch {
-            return UserRole.USER;
+            return UserRole.USER
         }
-    }, []);
+    }, [])
 
-    // فقط ادمین اجازه ویرایش/حذف داره
-    const canEdit = userRole === UserRole.ADMIN;
-    const canDelete = userRole === UserRole.ADMIN;
+    const canEdit = userRole === UserRole.ADMIN
+    const canDelete = userRole === UserRole.ADMIN
 
-    // گروه‌بندی دستگاه‌ها بر اساس نام مالک
+    // گروه‌بندی دستگاه‌ها بر اساس مالک
     const groupedDevices = useMemo(() => {
         return devices.reduce((acc, device) => {
-            // اگه نام مالک خالی بود، یه اسم پیش‌فرض می‌ذاریم
-            const owner = device.owner_name || "بدون مالک مشخص";
-
+            const owner = device.owner_name?.trim() || "بدون مالک"
             if (!acc[owner]) {
-                acc[owner] = [];
+                acc[owner] = []
             }
-            acc[owner].push(device);
-
-            return acc;
-        }, {} as Record<string, Device[]>);
-    }, [devices]);
+            acc[owner].push(device)
+            return acc
+        }, {} as Record<string, Device[]>)
+    }, [devices])
 
     return (
         <div dir="rtl" className="space-y-12">
             <form onSubmit={handleSubmit} className="space-y-8">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* مشخصات مشتری */}
+                    {/* مشخصات مشتری و دستگاه */}
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
-                        <h3 className="text-base font-bold text-gray-800 mb-4">مشخصات مشتری</h3>
+                        <h3 className="text-base font-bold text-gray-800 mb-4">مشخصات دستگاه و انتصاب مالک</h3>
                         <Field label="نام دستگاه" fieldKey="deviceName" error={errors.deviceName} value={form.deviceName} onChange={handleChange} required />
                         <Field label="IMEI" fieldKey="imei" error={errors.imei} value={form.imei} onChange={handleChange} required />
                         <Field label="کد دستگاه" fieldKey="deviceCode" error={errors.deviceCode} value={form.deviceCode} onChange={handleChange} required />
-                        <Field label="نام مالک" fieldKey="ownerName" error={errors.ownerName} value={form.ownerName} onChange={handleChange} required />
+
+                        {/* فیلد انتساب مالک به صورت Select + دکمه باز کردن UserFormModal */}
+                        <div className="flex items-center gap-3 mb-3">
+                            <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
+                                مالک دستگاه:
+                            </label>
+                            <div className="flex-1 flex gap-2">
+                                <select
+                                    value={String(form.userId || "")}
+                                    onChange={(e) => handleUserSelect(e.target.value)}
+                                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                                >
+                                    <option value="">-- بدون مالک --</option>
+                                    {users.map((u) => (
+                                        <option key={u.id} value={String(u.id)}>
+                                            {u.full_name || u.username || `کاربر کد ${u.id}`}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddUserModalOpen(true)}
+                                    className="bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition"
+                                    title="ثبت کاربر جدید"
+                                >
+                                    + کاربر جدید
+                                </button>
+                            </div>
+                        </div>
+
                         <JalaliDatePicker label="زمان شروع" value={form.startTime} onChange={(val) => handleChange("startTime", val)} error={errors.startTime} />
                         <JalaliDatePicker label="زمان پایان" value={form.endTime} onChange={(val) => handleChange("endTime", val)} error={errors.endTime} />
                         <Field label="تلفن" fieldKey="phone" error={errors.phone} value={form.phone} onChange={handleChange} />
@@ -491,18 +628,17 @@ export default function DeviceManagePage() {
                         <Field label="فاصله از ترانس" fieldKey="distanceFromTrans" error={errors.distanceFromTrans} value={form.distanceFromTrans} onChange={handleChange} />
                         <Field label="سایز کابل" fieldKey="cableSize" error={errors.cableSize} value={form.cableSize} onChange={handleChange} />
 
-                        {/* ولتاژ فاز به فاز به همراه چک باکس */}
+                        {/* ولتاژ فاز به فاز */}
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-32 shrink-0 flex items-center gap-2">
                                 <input
                                     type="checkbox"
                                     checked={form.enableLineToLine}
                                     onChange={(e) => {
-                                        handleChange("enableLineToLine", e.target.checked);
-                                        // اگه تیک برداشته شد مقادیر رو خالی میکنیم
+                                        handleChange("enableLineToLine", e.target.checked)
                                         if (!e.target.checked) {
-                                            handleChange("lineToLineLower", "");
-                                            handleChange("lineToLineUpper", "");
+                                            handleChange("lineToLineLower", "")
+                                            handleChange("lineToLineUpper", "")
                                         }
                                     }}
                                     className="w-4 h-4 accent-blue-600 cursor-pointer"
@@ -529,18 +665,17 @@ export default function DeviceManagePage() {
                             </div>
                         </div>
 
-                        {/* ولتاژ فاز به نول به همراه چک باکس */}
+                        {/* ولتاژ فاز به نول */}
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-32 shrink-0 flex items-center gap-2">
                                 <input
                                     type="checkbox"
                                     checked={form.enableLineToNull}
                                     onChange={(e) => {
-                                        handleChange("enableLineToNull", e.target.checked);
-                                        // اگه تیک برداشته شد مقادیر رو خالی میکنیم
+                                        handleChange("enableLineToNull", e.target.checked)
                                         if (!e.target.checked) {
-                                            handleChange("lineToPhaseLower", "");
-                                            handleChange("lineToPhaseUpper", "");
+                                            handleChange("lineToPhaseLower", "")
+                                            handleChange("lineToPhaseUpper", "")
                                         }
                                     }}
                                     className="w-4 h-4 accent-blue-600 cursor-pointer"
@@ -613,66 +748,72 @@ export default function DeviceManagePage() {
                         </tr>
                         </thead>
                         <tbody>
-                            {Object.keys(groupedDevices).length > 0 ? (
-                                Object.entries(groupedDevices).map(([owner, ownerDevices]) => (
-                                    <React.Fragment key={owner}>
-                                        {/* سطر جداکننده برای هر مالک */}
-                                        <tr className="bg-blue-100 border-b-2 border-blue-200">
-                                            <td colSpan={canEdit ? 9 : 8} className="px-6 py-3 font-bold text-blue-900 text-center">
-                                                👤 مالک: {owner} (تعداد دستگاه: {ownerDevices.length})
-                                            </td>
-                                        </tr>
+                        {Object.keys(groupedDevices).length > 0 ? (
+                            Object.entries(groupedDevices).map(([owner, ownerDevices]) => (
+                                <React.Fragment key={owner}>
+                                    <tr className="bg-blue-100 border-b-2 border-blue-200">
+                                        <td colSpan={canEdit ? 9 : 8} className="px-6 py-3 font-bold text-blue-900 text-center">
+                                            👤 مالک: {owner} (تعداد دستگاه: {ownerDevices.length})
+                                        </td>
+                                    </tr>
 
-                                        {/* دستگاه‌های مربوط به این مالک */}
-                                        {ownerDevices.map((device) => (
-                                            <tr key={device.id} className={`border-b transition ${editingId === device.id ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
-                                                <td className="px-6 py-4">{device.device_name}</td>
-                                                <td className="px-6 py-4 font-mono">{device.imei}</td>
-                                                <td className="px-6 py-4 font-mono">{device.device_code}</td>
-                                                <td className="px-6 py-4">{device.owner_name}</td>
-                                                <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.start_time)}</td>
-                                                <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.end_time)}</td>
-                                                <td className="px-6 py-4" dir="ltr">{device.phone}</td>
-                                                <td className="px-6 py-4">
-                                                    {device.is_active ? (
-                                                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">فعال</span>
-                                                    ) : (
-                                                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">غیرفعال</span>
+                                    {ownerDevices.map((device) => (
+                                        <tr key={device.id} className={`border-b transition ${editingId === device.id ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
+                                            <td className="px-6 py-4">{device.device_name}</td>
+                                            <td className="px-6 py-4 font-mono">{device.imei}</td>
+                                            <td className="px-6 py-4 font-mono">{device.device_code}</td>
+                                            <td className="px-6 py-4">{device.owner_name || "بدون مالک"}</td>
+                                            <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.start_time)}</td>
+                                            <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.end_time)}</td>
+                                            <td className="px-6 py-4" dir="ltr">{device.phone}</td>
+                                            <td className="px-6 py-4">
+                                                {device.is_active ? (
+                                                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">فعال</span>
+                                                ) : (
+                                                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">غیرفعال</span>
+                                                )}
+                                            </td>
+                                            {canEdit && (
+                                                <td className="px-6 py-4 flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEditClick(device)}
+                                                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs transition"
+                                                    >
+                                                        ویرایش
+                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={() => handleDelete(device.id)}
+                                                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition"
+                                                        >
+                                                            حذف
+                                                        </button>
                                                     )}
                                                 </td>
-                                                {canEdit && (
-                                                    <td className="px-6 py-4 flex items-center justify-center gap-2">
-                                                        <button
-                                                            onClick={() => handleEditClick(device)}
-                                                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs transition"
-                                                        >
-                                                            ویرایش
-                                                        </button>
-                                                        {canDelete && (
-                                                            <button
-                                                                onClick={() => handleDelete(device.id)}
-                                                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition"
-                                                            >
-                                                                حذف
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </React.Fragment>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={canEdit ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
-                                        هیچ دستگاهی یافت نشد!
-                                    </td>
-                                </tr>
-                            )}
+                                            )}
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={canEdit ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
+                                    هیچ دستگاهی یافت نشد!
+                                </td>
+                            </tr>
+                        )}
                         </tbody>
                     </table>
                 </div>
             </section>
+
+            {/* فراخوانی کامپوننت مودال استاندارد کاربر */}
+            <UserFormModal
+                open={isAddUserModalOpen}
+                onClose={() => setIsAddUserModalOpen(false)}
+                onSubmit={handleCreateUserFromModal}
+                roles={roles}
+            />
         </div>
     )
 }

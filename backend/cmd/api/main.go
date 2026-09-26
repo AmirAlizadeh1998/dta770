@@ -178,6 +178,7 @@ func main() {
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))
 	mux.HandleFunc("/api/devices/active", middleware.MainMiddleware(handlers.GetActiveDevicesHandler))
 	mux.HandleFunc("/api/devices/analyze", middleware.MainMiddleware(handlers.AnalyzeDeviceHandler))
+	mux.HandleFunc("/api/devices/my", middleware.MainMiddleware(handlers.GetUserDevicesHandler))
 	mux.HandleFunc("/api/devices/", middleware.MainMiddleware(handlers.DevicesHandler))
 	mux.HandleFunc("/api/devices", middleware.MainMiddleware(handlers.DevicesHandler))
 	mux.HandleFunc("/api/monitor/devices/", middleware.MainMiddleware(handlers.DeviceMonitorDetailHandler))
