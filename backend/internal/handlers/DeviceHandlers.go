@@ -413,7 +413,6 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// اگه کاربر عادی بود، فقط دستگاه‌هایی که user_id شون برابر آیدی خودشه رو بیار
 		query := baseQuery + " WHERE user_id = $1 ORDER BY id DESC"
-		// ⚠️ توجه: اگه از PostgreSQL استفاده می‌کنی به جای ؟ باید از 1$ استفاده کنی
 		rows, err = database.DB.Query(query, userID)
 	}
 

@@ -9,10 +9,10 @@ export default function DeviceListPage() {
 
     const loadDevices = async () => {
         try {
-            const token = localStorage.getItem("token");
+
             const res = await apiFetch("/api/devices/my", {
                 headers: {
-                    Authorization: `Bearer ${token}`
+                    Authorization: `Bearer ${localStorage.getItem("token")}`
                 }
             });
 
@@ -139,10 +139,11 @@ export default function DeviceListPage() {
                                 </span>
                                 <button
                                     onClick={() => {
+                                        // دقیقاً مشابه DeviceCard در صفحه دستگاه‌های فعال
                                         window.dispatchEvent(
                                             new CustomEvent("monitor-device", {
                                                 detail: {
-                                                    device_name: device.device_code || device.device_name,
+                                                    deviceName: device.device_name,
                                                     imei: device.imei
                                                 }
                                             })
