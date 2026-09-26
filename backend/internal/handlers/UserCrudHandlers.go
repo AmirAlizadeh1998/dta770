@@ -178,7 +178,7 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	sqlStatement := `
 		UPDATE users 
 		SET user_name = $1, password = $2, mobile = $3, role_id = $4, status = $5, full_name = $6
-		WHERE id = $8
+		WHERE id = $7
 	`
 
 	// پاس دادن u.RoleId به جای role قدیمی
