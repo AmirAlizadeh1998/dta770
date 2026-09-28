@@ -19,7 +19,7 @@ import LogsTable from "./report/DeviceLogsPage.tsx";
 import DeviceMonitorPage from "./report/DeviceMonitorPage.tsx";
 import DataAnalyzePage from "./report/DataAnalyzePage.tsx";
 import { UserProfilePage } from "./profile/UserProfilePage.tsx";
-import AiChatPage from "./report/AiChatPage.tsx";
+import AiFileAnalyzePage from "./report/AiFileAnalyzePage.tsx";
 import type { DeviceMonitorSelection } from "../models/device.ts";
 import DeviceListPage from "./devices/DeviceListPage.tsx";
 
@@ -206,7 +206,7 @@ export function Dashboard() {
             case "logs": return <LogsTable />
             case "monitor": return <DeviceMonitorPage initialDevice={activeDevice} />
             case "analyze": return <DataAnalyzePage/>
-            case "analyze-ai": return <AiChatPage/>
+            case "analyze-ai": return <AiFileAnalyzePage/>
             case "profile": return <UserProfilePage/>
             default:
                 return (

@@ -172,7 +172,7 @@ func main() {
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
 	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
 	//mux.HandleFunc("/api/ai/chat", middleware.MainMiddleware(handlers.AiChatHandler(&gapGptClient)))
-	mux.HandleFunc("/api/ai/file-search", middleware.MainMiddleware(handlers.AiFileSearchHandler(&gapGptClient)))
+	mux.HandleFunc("/api/ai/file-search", middleware.MainMiddleware(handlers.AiFileAnalyzeHandler(&gapGptClient)))
 	mux.HandleFunc("/api/users", middleware.MainMiddleware(usersRouter))
 	mux.HandleFunc("/api/users/profile", middleware.MainMiddleware(handlers.UserProfileHandler))
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))

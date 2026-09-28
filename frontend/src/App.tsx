@@ -3,6 +3,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { LoginPage } from "./pages/LoginPage";
 import { ProtectedRoute } from "./api/ProtectedRoute";
 import {LoadingProvider} from "./components/LoadingComponent.tsx";
+import {AiChatProvider} from "./components/AiChatContext.tsx";
 
 function App() {
     return (
@@ -25,7 +26,9 @@ function App() {
                                 path="/dashboard"
                                 element={
                                     <ProtectedRoute>
-                                        <Dashboard />
+                                        <AiChatProvider>
+                                            <Dashboard />
+                                        </AiChatProvider>
                                     </ProtectedRoute>
                                 }
                             />

@@ -16,7 +16,7 @@ import (
 	"github.com/openai/openai-go"
 )
 
-func AiFileSearchHandler(client *openai.Client) http.HandlerFunc {
+func AiFileAnalyzeHandler(client *openai.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)

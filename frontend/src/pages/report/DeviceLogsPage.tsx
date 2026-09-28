@@ -182,6 +182,30 @@ const LogsTable = () => {
                 return;
             }
 
+            const getShamsiDateTime = () => {
+                const now = new Date();
+
+                // تنظیمات فرمت برای تاریخ و ساعت
+                const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false // برای اینکه 24 ساعته باشه
+                });
+
+                const parts = formatter.formatToParts(now);
+
+                // استخراج بخش‌ها با مپ کردن
+                const map = new Map(parts.map(p => [p.type, p.value]));
+
+                // ساخت رشته نهایی: 1403-07-06_14-30-05
+                // return `${map.get('year')}-${map.get('month')}-${map.get('day')}_${map.get('hour')}-${map.get('minute')}-${map.get('second')}`;
+                return `${map.get('year')}-${map.get('month')}-${map.get('day')}`
+            };
+
             const cleanValue = (val: any) => {
                 if (val === null || val === undefined || val === '') return '-';
                 const strVal = String(val).toLowerCase();
@@ -375,7 +399,8 @@ const LogsTable = () => {
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Sensor Logs");
 
-            const fileName = `Export_${exportImei || 'All'}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            const dateTimeString = getShamsiDateTime();
+            const fileName = `${exportDeviceName || 'All'}_${dateTimeString}.xlsx`;
             XLSX.writeFile(workbook, fileName);
 
             setIsExportModalOpen(false);
