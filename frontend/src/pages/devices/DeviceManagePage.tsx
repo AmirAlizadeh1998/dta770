@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react"
+import React, {useEffect, useMemo, useState} from "react"
 import JalaliDatePicker from "../../components/JalaliDatePicker.tsx"
-import { FormatToJalali } from "../../utils/Formatters.ts"
-import { UserRole } from "../../models/consts.ts"
-import { jwtDecode } from "jwt-decode"
+import {FormatToJalali} from "../../utils/Formatters.ts"
+import {UserRole} from "../../models/consts.ts"
+import {jwtDecode} from "jwt-decode"
 import UserFormModal from "../../components/UserFormModal.tsx"
-import type { Role, UserFormData } from "../../models/user"
+import type {Role, UserFormData} from "../../models/user"
 
 type UserItem = {
     id: number | string
@@ -43,6 +43,7 @@ type Device = {
         line_to_phase_upper?: string | null
         line_to_phase_lower?: string | null
     } | string
+    alert_phones?: string[] | null
 }
 
 type DeviceForm = {
@@ -73,6 +74,7 @@ type DeviceForm = {
     lineToPhaseLower: string
     enableLineToLine: boolean
     enableLineToNull: boolean
+    alertPhones: string[]
 }
 
 const initialForm: DeviceForm = {
@@ -103,15 +105,16 @@ const initialForm: DeviceForm = {
     lineToPhaseLower: "",
     enableLineToLine: false,
     enableLineToNull: false,
+    alertPhones: [],
 }
 
 const connectionFields: { key: keyof DeviceForm; label: string }[] = [
-    { key: "fuseBox", label: "اتصالات و جعبه فیوز" },
-    { key: "nullConnection", label: "اتصالات نول" },
-    { key: "fuseComb", label: "شانه فیوز" },
-    { key: "lineBalance", label: "بالانس خط‌ها" },
-    { key: "unitEarth", label: "ارت واحد" },
-    { key: "upsBattery", label: "UPS باطری" },
+    {key: "fuseBox", label: "اتصالات و جعبه فیوز"},
+    {key: "nullConnection", label: "اتصالات نول"},
+    {key: "fuseComb", label: "شانه فیوز"},
+    {key: "lineBalance", label: "بالانس خط‌ها"},
+    {key: "unitEarth", label: "ارت واحد"},
+    {key: "upsBattery", label: "UPS باطری"},
 ]
 
 type FieldProps = {
@@ -124,7 +127,7 @@ type FieldProps = {
     onChange: (key: keyof DeviceForm, value: string) => void
 }
 
-function Field({ label, fieldKey, value, required, placeholder, onChange, error }: FieldProps) {
+function Field({label, fieldKey, value, required, placeholder, onChange, error}: FieldProps) {
     return (
         <div className="flex items-center gap-3 mb-3">
             <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
@@ -154,12 +157,15 @@ export default function DeviceManagePage() {
     const [roles, setRoles] = useState<Role[]>([])
     const [editingId, setEditingId] = useState<number | string | null>(null)
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
+    const [phoneInput, setPhoneInput] = useState("")
+    const [phoneError, setPhoneError] = useState("")
+    const userRoleId = roles.find(r => r.name.toLowerCase() === "user")?.id ?? 7;
 
     const fetchDevices = async () => {
         try {
             const token = localStorage.getItem("token")
             const response = await fetch("/api/devices", {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {Authorization: `Bearer ${token}`}
             })
             if (response.ok) {
                 const data = await response.json()
@@ -174,7 +180,7 @@ export default function DeviceManagePage() {
         try {
             const token = localStorage.getItem("token")
             const response = await fetch("/api/users", {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {Authorization: `Bearer ${token}`}
             })
             if (response.ok) {
                 const data = await response.json()
@@ -189,7 +195,7 @@ export default function DeviceManagePage() {
         try {
             const token = localStorage.getItem("token")
             const response = await fetch("/api/roles", {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {Authorization: `Bearer ${token}`}
             })
             if (response.ok) {
                 const data = await response.json()
@@ -211,6 +217,7 @@ export default function DeviceManagePage() {
         const trimmedName = form.deviceName.trim()
         const trimmedImei = form.imei.trim()
         const trimmedDeviceCode = form.deviceCode.trim()
+        const trimmedPhone = form.phone.trim()
 
         if (!trimmedName) e.deviceName = "نام دستگاه اجباری است"
         if (!trimmedDeviceCode) {
@@ -227,7 +234,15 @@ export default function DeviceManagePage() {
         if (!trimmedImei) {
             e.imei = "IMEI اجباری است"
         } else if (!/^\d{15}$/.test(trimmedImei)) {
-            e.imei = "IMEI باید ۱۵ رقم باشد"
+            e.imei = "IMEI باید دقیقاً ۱۵ رقم عددی باشد"
+        }
+
+        // 👈 اعتبارسنجی فیلد تلفن اصلی (موبایل یا ثابت معتبر ایران)
+        if (trimmedPhone) {
+            const isValidPhone = /^09\d{9}$/.test(trimmedPhone) || /^0[1-8]\d{8,9}$/.test(trimmedPhone)
+            if (!isValidPhone) {
+                e.phone = "شماره تلفن نامعتبر است (مثال موبایل: 09123456789 یا ثابت با پیش‌شماره: 02188888888)"
+            }
         }
 
         if (trimmedName && trimmedImei) {
@@ -247,17 +262,24 @@ export default function DeviceManagePage() {
         return Object.keys(e).length === 0
     }
 
+    const toEnglishDigits = (str: string) => {
+        return str
+            .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+            .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+            .replace(/\D/g, "") // هر چی غیر از عدد بود رو می‌ندازه دور
+    }
+
     const handleChange = (key: keyof DeviceForm, value: any) => {
-        setForm((prev) => ({ ...prev, [key]: value }))
+        setForm((prev) => ({...prev, [key]: value}))
         if (errors[key]) {
-            setErrors((prev) => ({ ...prev, [key]: undefined }))
+            setErrors((prev) => ({...prev, [key]: undefined}))
         }
     }
 
     // تغییر کاربر از سلکت‌باکس
     const handleUserSelect = (userIdValue: string) => {
         if (!userIdValue) {
-            setForm((prev) => ({ ...prev, userId: "", ownerName: "" }))
+            setForm((prev) => ({...prev, userId: "", ownerName: ""}))
             return
         }
         const selectedUser = users.find((u) => String(u.id) === userIdValue)
@@ -377,6 +399,7 @@ export default function DeviceManagePage() {
                     is_active: form.isActive,
                     alarm: JSON.stringify(alarmData),
                     voice_note_path: "",
+                    alert_phones: form.alertPhones,
                 }),
             })
 
@@ -387,9 +410,9 @@ export default function DeviceManagePage() {
                 if (response.status === 409) {
                     const msg = data.message || ""
                     if (msg.includes("کد دستگاه")) {
-                        setErrors((prev) => ({ ...prev, deviceCode: "این کد دستگاه قبلاً در دیتابیس ثبت شده است" }))
+                        setErrors((prev) => ({...prev, deviceCode: "این کد دستگاه قبلاً در دیتابیس ثبت شده است"}))
                     } else if (msg.includes("دستگاه فعال دیگر") || msg.includes("فعال")) {
-                        setErrors((prev) => ({ ...prev, imei: "یک دستگاه فعال دیگر با این IMEI وجود دارد!" }))
+                        setErrors((prev) => ({...prev, imei: "یک دستگاه فعال دیگر با این IMEI وجود دارد!"}))
                     } else if (msg.includes("ترکیب") || msg.includes("نام و IMEI")) {
                         setErrors((prev) => ({
                             ...prev,
@@ -418,7 +441,7 @@ export default function DeviceManagePage() {
             const token = localStorage.getItem("token")
             const response = await fetch(`/api/devices/${id}`, {
                 method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {Authorization: `Bearer ${token}`}
             })
 
             if (response.ok) {
@@ -472,6 +495,14 @@ export default function DeviceManagePage() {
             }
         }
 
+        let initialPhones: string[] = []
+        if (Array.isArray(device.alert_phones)) {
+            initialPhones = device.alert_phones
+        } else if (typeof (device as any).alert_phones === "string") {
+            // اگر بک‌اند فرمت {0912...,0913...} پستگرس رو به صورت رشته خام داده بود
+            initialPhones = (device as any).alert_phones.replace(/[{}]/g, "").split(",").filter(Boolean)
+        }
+
         const safeString = (val: any) => (val !== null && val !== undefined ? String(val) : "")
 
         const l2lUpper = parsedAlarm?.line_to_line_upper
@@ -510,15 +541,47 @@ export default function DeviceManagePage() {
             lineToPhaseLower: safeString(l2nLower),
             enableLineToLine: hasLineToLine,
             enableLineToNull: hasLineToNull,
+            alertPhones: initialPhones,
         })
 
-        window.scrollTo({ top: 0, behavior: "smooth" })
+        window.scrollTo({top: 0, behavior: "smooth"})
     }
 
     const handleCancelEdit = () => {
         setForm(initialForm)
         setEditingId(null)
         setErrors({})
+    }
+
+    const handleAddAlertPhone = () => {
+        const raw = toEnglishDigits(phoneInput.trim())
+        if (!raw) return
+
+        // بررسی دقیق فرمت موبایل ایران (۱۱ رقم که با 09 شروع میشه)
+        const isValidPhone = /^09\d{9}$/.test(raw)
+        if (!isValidPhone) {
+            setPhoneError("شماره باید یک شماره موبایل معتبر ۱۱ رقمی باشد (مثال: 09123456789)")
+            return
+        }
+
+        if (form.alertPhones.includes(raw)) {
+            setPhoneError("این شماره قبلاً در لیست هشدارها ثبت شده است")
+            return
+        }
+
+        setForm((prev) => ({
+            ...prev,
+            alertPhones: [...prev.alertPhones, raw]
+        }))
+        setPhoneInput("")
+        setPhoneError("")
+    }
+
+    const handleRemoveAlertPhone = (targetPhone: string) => {
+        setForm((prev) => ({
+            ...prev,
+            alertPhones: prev.alertPhones.filter((p) => p !== targetPhone)
+        }))
     }
 
     const userRole = useMemo(() => {
@@ -554,9 +617,12 @@ export default function DeviceManagePage() {
                     {/* مشخصات مشتری و دستگاه */}
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
                         <h3 className="text-base font-bold text-gray-800 mb-4">مشخصات دستگاه و انتصاب مالک</h3>
-                        <Field label="نام دستگاه" fieldKey="deviceName" error={errors.deviceName} value={form.deviceName} onChange={handleChange} required />
-                        <Field label="IMEI" fieldKey="imei" error={errors.imei} value={form.imei} onChange={handleChange} required />
-                        <Field label="کد دستگاه" fieldKey="deviceCode" error={errors.deviceCode} value={form.deviceCode} onChange={handleChange} required />
+                        <Field label="نام دستگاه" fieldKey="deviceName" error={errors.deviceName}
+                               value={form.deviceName} onChange={handleChange} required/>
+                        <Field label="IMEI" fieldKey="imei" error={errors.imei} value={form.imei}
+                               onChange={handleChange} required/>
+                        <Field label="کد دستگاه" fieldKey="deviceCode" error={errors.deviceCode} value={form.deviceCode}
+                               onChange={handleChange} required/>
 
                         {/* فیلد انتساب مالک به صورت Select + دکمه باز کردن UserFormModal */}
                         <div className="flex items-center gap-3 mb-3">
@@ -587,10 +653,102 @@ export default function DeviceManagePage() {
                             </div>
                         </div>
 
-                        <JalaliDatePicker label="زمان شروع" value={form.startTime} onChange={(val) => handleChange("startTime", val)} error={errors.startTime} />
-                        <JalaliDatePicker label="زمان پایان" value={form.endTime} onChange={(val) => handleChange("endTime", val)} error={errors.endTime} />
-                        <Field label="تلفن" fieldKey="phone" error={errors.phone} value={form.phone} onChange={handleChange} />
-                        <Field label="آدرس" fieldKey="address" error={errors.address} value={form.address} onChange={handleChange} />
+                        <JalaliDatePicker label="زمان شروع" value={form.startTime}
+                                          onChange={(val) => handleChange("startTime", val)} error={errors.startTime}/>
+                        <JalaliDatePicker label="زمان پایان" value={form.endTime}
+                                          onChange={(val) => handleChange("endTime", val)} error={errors.endTime}/>
+                        {/* فیلد تلفن اصلی با اعتبارسنجی لحظه‌ای */}
+                        <div className="flex items-center gap-3 mb-3">
+                            <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
+                                تلفن:
+                            </label>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    dir="ltr"
+                                    maxLength={11}
+                                    placeholder="09123456789"
+                                    value={form.phone}
+                                    onChange={(e) => {
+                                        const cleaned = toEnglishDigits(e.target.value)
+                                        handleChange("phone", cleaned)
+                                    }}
+                                    className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono ${
+                                        errors.phone ? "border-red-400" : "border-gray-300"
+                                    }`}
+                                />
+                                {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+                            </div>
+                        </div>
+                        {/* فیلد داینامیک شماره‌های دریافت پیامک هشدار */}
+                        {/* فیلد داینامیک شماره‌های دریافت پیامک هشدار به همراه دکمه و بج‌ها */}
+                        <div className="flex flex-col gap-2 mb-4">
+                            <div className="flex items-center gap-3">
+                                <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
+                                    شماره‌های هشدار:
+                                </label>
+                                <div className="flex-1 flex gap-2">
+                                    <input
+                                        type="text"
+                                        dir="ltr"
+                                        maxLength={11}
+                                        placeholder="09xxxxxxxxx"
+                                        value={phoneInput}
+                                        onChange={(e) => {
+                                            const cleaned = toEnglishDigits(e.target.value)
+                                            setPhoneInput(cleaned)
+                                            if (phoneError) setPhoneError("")
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault()
+                                                handleAddAlertPhone()
+                                            }
+                                        }}
+                                        className={`flex-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono ${
+                                            phoneError ? "border-red-400" : "border-gray-300"
+                                        }`}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddAlertPhone}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-xs font-semibold whitespace-nowrap transition cursor-pointer"
+                                    >
+                                        + افزودن
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* نمایش خطای اعتبارسنجی شماره */}
+                            {phoneError && (
+                                <p className="text-red-500 text-xs mr-35">{phoneError}</p>
+                            )}
+
+                            {/* لیست بج‌های شماره‌های اضافه شده */}
+                            {form.alertPhones.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mr-35 mt-1">
+                                    {form.alertPhones.map((phone) => (
+                                        <span
+                                            key={phone}
+                                            className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-2.5 py-1 rounded-full font-mono shadow-xs"
+                                        >
+                                            <span>{phone}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveAlertPhone(phone)}
+                                                className="text-gray-400 hover:text-red-600 focus:outline-none text-sm font-bold leading-none cursor-pointer"
+                                                title="حذف شماره"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <Field label="آدرس" fieldKey="address" error={errors.address} value={form.address}
+                               onChange={handleChange}/>
                     </section>
 
                     {/* مشخصات اتصالات */}
@@ -600,7 +758,9 @@ export default function DeviceManagePage() {
                             {connectionFields.map((item) => (
                                 <label key={item.key} className="flex items-center justify-between cursor-pointer">
                                     <span className="text-sm text-gray-600">{item.label}:</span>
-                                    <input type="checkbox" checked={form[item.key] as boolean} onChange={(e) => handleChange(item.key, e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                                    <input type="checkbox" checked={form[item.key] as boolean}
+                                           onChange={(e) => handleChange(item.key, e.target.checked)}
+                                           className="w-4 h-4 accent-blue-600"/>
                                 </label>
                             ))}
                         </div>
@@ -613,11 +773,15 @@ export default function DeviceManagePage() {
                         <h3 className="text-base font-bold text-gray-800 mb-4">سایر</h3>
                         <div className="flex gap-3 mb-3">
                             <label className="w-24 shrink-0 text-sm text-gray-600 text-left pt-2">توضیحات</label>
-                            <textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={4} className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+                            <textarea value={form.description}
+                                      onChange={(e) => handleChange("description", e.target.value)} rows={4}
+                                      className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"/>
                         </div>
                         <label className="flex items-center justify-end gap-2 mb-3 cursor-pointer">
                             <span className="text-sm text-gray-600">فعال؟</span>
-                            <input type="checkbox" checked={form.isActive} onChange={(e) => handleChange("isActive", e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                            <input type="checkbox" checked={form.isActive}
+                                   onChange={(e) => handleChange("isActive", e.target.checked)}
+                                   className="w-4 h-4 accent-blue-600"/>
                         </label>
                     </section>
 
@@ -625,8 +789,10 @@ export default function DeviceManagePage() {
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
                         <h3 className="text-base font-bold text-gray-800 mb-4">تجهیزات</h3>
 
-                        <Field label="فاصله از ترانس" fieldKey="distanceFromTrans" error={errors.distanceFromTrans} value={form.distanceFromTrans} onChange={handleChange} />
-                        <Field label="سایز کابل" fieldKey="cableSize" error={errors.cableSize} value={form.cableSize} onChange={handleChange} />
+                        <Field label="فاصله از ترانس" fieldKey="distanceFromTrans" error={errors.distanceFromTrans}
+                               value={form.distanceFromTrans} onChange={handleChange}/>
+                        <Field label="سایز کابل" fieldKey="cableSize" error={errors.cableSize} value={form.cableSize}
+                               onChange={handleChange}/>
 
                         {/* ولتاژ فاز به فاز */}
                         <div className="flex items-center gap-3 mb-3">
@@ -704,11 +870,14 @@ export default function DeviceManagePage() {
 
                         <label className="flex items-center justify-end gap-2 mb-3 cursor-pointer">
                             <span className="text-sm text-gray-600">سه فاز</span>
-                            <input type="checkbox" checked={form.threePhase} onChange={(e) => handleChange("threePhase", e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                            <input type="checkbox" checked={form.threePhase}
+                                   onChange={(e) => handleChange("threePhase", e.target.checked)}
+                                   className="w-4 h-4 accent-blue-600"/>
                         </label>
                         <div className="flex items-center gap-3">
                             <label className="w-32 shrink-0 text-sm text-gray-600 text-left">متریال‌ها</label>
-                            <select value={form.materials} onChange={(e) => handleChange("materials", e.target.value)} className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <select value={form.materials} onChange={(e) => handleChange("materials", e.target.value)}
+                                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
                                 <option value="">انتخاب...</option>
                                 <option value="copper">مس</option>
                                 <option value="aluminum">آلومینیوم</option>
@@ -718,11 +887,13 @@ export default function DeviceManagePage() {
                 </div>
 
                 <div className="flex justify-start gap-3">
-                    <button type="submit" className={`${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-8 py-2 rounded-md transition`}>
+                    <button type="submit"
+                            className={`${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-8 py-2 rounded-md transition`}>
                         {editingId ? "بروزرسانی دستگاه" : "ذخیره دستگاه"}
                     </button>
                     {editingId && (
-                        <button type="button" onClick={handleCancelEdit} className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-2 rounded-md transition">
+                        <button type="button" onClick={handleCancelEdit}
+                                className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-2 rounded-md transition">
                             انصراف
                         </button>
                     )}
@@ -752,25 +923,49 @@ export default function DeviceManagePage() {
                             Object.entries(groupedDevices).map(([owner, ownerDevices]) => (
                                 <React.Fragment key={owner}>
                                     <tr className="bg-blue-100 border-b-2 border-blue-200">
-                                        <td colSpan={canEdit ? 9 : 8} className="px-6 py-3 font-bold text-blue-900 text-center">
+                                        <td colSpan={canEdit ? 9 : 8}
+                                            className="px-6 py-3 font-bold text-blue-900 text-center">
                                             👤 مالک: {owner} (تعداد دستگاه: {ownerDevices.length})
                                         </td>
                                     </tr>
 
                                     {ownerDevices.map((device) => (
-                                        <tr key={device.id} className={`border-b transition ${editingId === device.id ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
+                                        <tr key={device.id}
+                                            className={`border-b transition ${editingId === device.id ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
                                             <td className="px-6 py-4">{device.device_name}</td>
                                             <td className="px-6 py-4 font-mono">{device.imei}</td>
                                             <td className="px-6 py-4 font-mono">{device.device_code}</td>
                                             <td className="px-6 py-4">{device.owner_name || "بدون مالک"}</td>
                                             <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.start_time)}</td>
                                             <td className="px-6 py-4" dir="ltr">{FormatToJalali(device.end_time)}</td>
-                                            <td className="px-6 py-4" dir="ltr">{device.phone}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                {/* شماره تلفن یا نام کاربر به‌صورت LTR و خوانا */}
+                                                <div dir="ltr" className="font-mono text-gray-800">
+                                                    {device.phone}
+                                                </div>
+
+                                                {/* بج تعداد شماره‌های هشدار */}
+                                                {device.alert_phones && device.alert_phones.length > 0 && (
+                                                    <div className="mt-1">
+                                                        <span
+                                                            dir="rtl"
+                                                            className="inline-flex items-center gap-1 text-[11px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded whitespace-nowrap shadow-xs"
+                                                            title={device.alert_phones.join(' ، ')}
+                                                        >
+                                                            <span>🔔</span>
+                                                            <span>{device.alert_phones.length} شماره هشدار</span>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </td>
+
                                             <td className="px-6 py-4">
                                                 {device.is_active ? (
-                                                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">فعال</span>
+                                                    <span
+                                                        className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">فعال</span>
                                                 ) : (
-                                                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">غیرفعال</span>
+                                                    <span
+                                                        className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">غیرفعال</span>
                                                 )}
                                             </td>
                                             {canEdit && (
@@ -812,7 +1007,7 @@ export default function DeviceManagePage() {
                 open={isAddUserModalOpen}
                 onClose={() => setIsAddUserModalOpen(false)}
                 onSubmit={handleCreateUserFromModal}
-                roles={roles}
+                fixedRoleId={userRoleId}
             />
         </div>
     )

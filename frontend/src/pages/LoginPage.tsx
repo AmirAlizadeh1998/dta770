@@ -82,7 +82,7 @@ export function LoginPage() {
                         type="submit"
                         className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition transform active:scale-95 flex items-center justify-center gap-2"
                     >
-                        <span>بزن بریم</span>
+                        <span>ورود</span>
                         <MdLogin className="text-xl" />
                     </button>
                 </form>

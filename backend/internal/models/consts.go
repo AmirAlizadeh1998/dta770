@@ -6,5 +6,6 @@ const (
 	RoleAdmin      = "Admin"
 	RoleUser       = "User"
 	RoleInstaller  = "Installer"
+	RoleSuperUser  = "SuperUser"
 	RoleReport     = "Report"
 )

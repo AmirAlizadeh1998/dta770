@@ -11,6 +11,81 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func UsersRouter(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		GetUsersHandler(w, r)
+	case http.MethodPost:
+		CreateUserHandler(w, r)
+	case http.MethodPut:
+		UpdateUserHandler(w, r)
+	case http.MethodDelete:
+		DeleteUserHandler(w, r)
+	default:
+		http.Error(w, "متد غیرمجاز", http.StatusMethodNotAllowed)
+	}
+}
+
+func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+	var u models.User
+
+	// ۱. دیکود کردن اطلاعاتی که فرانت‌اند (React) فرستاده
+	err := json.NewDecoder(r.Body).Decode(&u)
+	if err != nil {
+		log.Printf("Error decoding new user body: %v", err)
+		http.Error(w, "دیتای ارسالی نامعتبر است", http.StatusBadRequest) // کد 400
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		http.Error(w, "خطای سرور هنگام رمزنگاری پسورد", http.StatusInternalServerError)
+		return
+	}
+	// پسورد هش شده رو جایگزین پسورد خام توی استراکت می‌کنیم
+	u.Password = string(hashedPassword)
+
+	// ۲. مدیریت فیلدهای Nullable
+	mobile := sql.NullString{String: u.Mobile, Valid: u.Mobile != ""}
+	status := sql.NullString{String: u.Status, Valid: u.Status != ""}
+
+	// ۳. کوئری اینسرت (ستون role شد role_id)
+	sqlStatement := `
+		INSERT INTO users (user_name, password, mobile, role_id, status, full_name)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`
+
+	// ۴. اجرای کوئری و گرفتن ID کاربر جدید
+	err = database.DB.QueryRow(
+		sqlStatement,
+		u.UserName,  // $1
+		u.Password,  // $2 (این الان همون پسورد هش شده است)
+		mobile,      // $3
+		u.RoleId,    // $4
+		status,      // $5
+		u.FirstName, // $6
+	).Scan(&u.Id)
+	if err != nil {
+		// اینجا بعداً می‌تونی همون خطای تکراری بودن یوزرنیم (کد 23505) رو که حرفشو زدیم هندل کنی
+		log.Printf("Error inserting user into database: %v", err)
+		http.Error(w, "خطای داخلی سرور هنگام ساخت کاربر", http.StatusInternalServerError) // کد 500
+		return
+	}
+
+	// ۵. ارسال تاییدیه و دیتای کاربر جدید به فرانت‌اند
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated) // کد 201 یعنی با موفقیت ساخته شد
+
+	// حواست باشه بهتره پسورد هش شده رو به فرانت‌اند برنگردونی، ولی فعلا کد خودت رو دست نزدم!
+	err = json.NewEncoder(w).Encode(u)
+	if err != nil {
+		log.Printf("Error encoding created user response: %v", err)
+		return
+	}
+}
+
 func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	// CORS و احراز هویت توسط mainMiddleware انجام میشه
 
@@ -81,66 +156,6 @@ func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(users)
 	if err != nil {
 		log.Printf("Error encoding users response: %v", err)
-		return
-	}
-}
-
-func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-	var u models.User
-
-	// ۱. دیکود کردن اطلاعاتی که فرانت‌اند (React) فرستاده
-	err := json.NewDecoder(r.Body).Decode(&u)
-	if err != nil {
-		log.Printf("Error decoding new user body: %v", err)
-		http.Error(w, "دیتای ارسالی نامعتبر است", http.StatusBadRequest) // کد 400
-		return
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("Error hashing password: %v", err)
-		http.Error(w, "خطای سرور هنگام رمزنگاری پسورد", http.StatusInternalServerError)
-		return
-	}
-	// پسورد هش شده رو جایگزین پسورد خام توی استراکت می‌کنیم
-	u.Password = string(hashedPassword)
-
-	// ۲. مدیریت فیلدهای Nullable
-	mobile := sql.NullString{String: u.Mobile, Valid: u.Mobile != ""}
-	status := sql.NullString{String: u.Status, Valid: u.Status != ""}
-
-	// ۳. کوئری اینسرت (ستون role شد role_id)
-	sqlStatement := `
-		INSERT INTO users (user_name, password, mobile, role_id, status, full_name)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`
-
-	// ۴. اجرای کوئری و گرفتن ID کاربر جدید
-	err = database.DB.QueryRow(
-		sqlStatement,
-		u.UserName,  // $1
-		u.Password,  // $2 (این الان همون پسورد هش شده است)
-		mobile,      // $3
-		u.RoleId,    // $4
-		status,      // $5
-		u.FirstName, // $6
-	).Scan(&u.Id)
-	if err != nil {
-		// اینجا بعداً می‌تونی همون خطای تکراری بودن یوزرنیم (کد 23505) رو که حرفشو زدیم هندل کنی
-		log.Printf("Error inserting user into database: %v", err)
-		http.Error(w, "خطای داخلی سرور هنگام ساخت کاربر", http.StatusInternalServerError) // کد 500
-		return
-	}
-
-	// ۵. ارسال تاییدیه و دیتای کاربر جدید به فرانت‌اند
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated) // کد 201 یعنی با موفقیت ساخته شد
-
-	// حواست باشه بهتره پسورد هش شده رو به فرانت‌اند برنگردونی، ولی فعلا کد خودت رو دست نزدم!
-	err = json.NewEncoder(w).Encode(u)
-	if err != nil {
-		log.Printf("Error encoding created user response: %v", err)
 		return
 	}
 }

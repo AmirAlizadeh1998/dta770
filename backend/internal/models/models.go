@@ -22,31 +22,32 @@ type LoginRequest struct {
 }
 
 type Device struct {
-	Id                int    `json:"id"`
-	DeviceName        string `json:"device_name"`
-	OwnerName         string `json:"owner_name"`
-	DeviceCode        string `json:"device_code"`
-	Imei              string `json:"imei"`
-	Phone             string `json:"phone"`
-	Address           string `json:"address"`
-	FuseBox           bool   `json:"fuse_box"`
-	NullConnection    bool   `json:"null_connection"`
-	FuseComb          bool   `json:"fuse_comb"`
-	LineBalance       bool   `json:"line_balance"`
-	UnitEarth         bool   `json:"unit_earth"`
-	UpsBattery        bool   `json:"ups_battery"`
-	DistanceFromTrans string `json:"distance_from_trans"`
-	CableSize         string `json:"cable_size"`
-	ThreePhase        bool   `json:"three_phase"`
-	Materials         string `json:"materials"`
-	Description       string `json:"description"`
-	IsActive          bool   `json:"is_active"`
-	DeactivatedAt     string `json:"deactivated_at,omitempty"`
-	StartTime         string `json:"start_time"`
-	EndTime           string `json:"end_time"`
-	LastSeenAt        string `json:"last_seen_at"`
-	Alarm             string `json:"alarm"`
-	UserID            *int64 `json:"user_id"`
+	Id                int      `json:"id"`
+	DeviceName        string   `json:"device_name"`
+	OwnerName         string   `json:"owner_name"`
+	DeviceCode        string   `json:"device_code"`
+	Imei              string   `json:"imei"`
+	Phone             string   `json:"phone"`
+	Address           string   `json:"address"`
+	FuseBox           bool     `json:"fuse_box"`
+	NullConnection    bool     `json:"null_connection"`
+	FuseComb          bool     `json:"fuse_comb"`
+	LineBalance       bool     `json:"line_balance"`
+	UnitEarth         bool     `json:"unit_earth"`
+	UpsBattery        bool     `json:"ups_battery"`
+	DistanceFromTrans string   `json:"distance_from_trans"`
+	CableSize         string   `json:"cable_size"`
+	ThreePhase        bool     `json:"three_phase"`
+	Materials         string   `json:"materials"`
+	Description       string   `json:"description"`
+	IsActive          bool     `json:"is_active"`
+	DeactivatedAt     string   `json:"deactivated_at,omitempty"`
+	StartTime         string   `json:"start_time"`
+	EndTime           string   `json:"end_time"`
+	LastSeenAt        string   `json:"last_seen_at"`
+	Alarm             string   `json:"alarm"`
+	UserID            *int64   `json:"user_id"`
+	AlertPhones       []string `json:"alert_phones"`
 }
 
 type DeviceResponse struct {
@@ -256,4 +257,36 @@ type DeviceDetailsResponse struct {
 	LastValidDataTime *time.Time        `json:"last_valid_data_time"`
 	Alarm             json.RawMessage   `json:"alarm,omitempty"`
 	DeactivatedAt     *time.Time        `json:"deactivated_at,omitempty"`
+}
+
+// Parameter پارامترهای ثابت سیستم (مثل ولتاژ، جریان و ...)
+type Parameter struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Unit    string `json:"unit"`
+	LabelFa string `json:"label_fa"`
+}
+
+// DeviceParameterLimit برای ارسال دیتای حدود دستگاه به سمت فرانت
+type DeviceParameterLimit struct {
+	ID            *int     `json:"id"` // پوینتر به خاطر این که ممکنه null باشه
+	DeviceID      int      `json:"device_id"`
+	ParameterID   int      `json:"parameter_id"`
+	ParameterName string   `json:"parameter_name"`
+	LabelFa       string   `json:"label_fa"`
+	Unit          string   `json:"unit"`
+	MinVal        *float64 `json:"min_val"` // پوینتر برای هندل کردن مقادیر خالی تو دیتابیس
+	MaxVal        *float64 `json:"max_val"`
+	IsActive      bool     `json:"is_active"`
+}
+
+// LimitUpdateRequest برای دریافت ریکوئست آپدیت حدود از سمت فرانت
+type LimitUpdateRequest struct {
+	ParameterID   int     `json:"parameter_id"`
+	ParameterName string  `json:"parameter_name"`
+	LabelFa       string  `json:"label_fa"`
+	Unit          string  `json:"unit"`
+	MinVal        *string `json:"min_val"`
+	MaxVal        *string `json:"max_val"`
+	IsActive      bool    `json:"is_active"`
 }

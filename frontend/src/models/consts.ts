@@ -253,5 +253,6 @@ export const UserRole = {
     INSTALLER: "Installer",
     REPORT: "Report",
     USER: "User",
+    SuperUser: "SuperUser",
 } as const;
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];

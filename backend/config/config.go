@@ -10,6 +10,8 @@ import (
 type Config struct {
 	GapAPIKey    string `mapstructure:"GAP_API_KEY"`
 	OpenAiApiKey string `mapstructure:"OPENAI_API_KEY"`
+	SmsApiKey    string `mapstructure:"SMS_API_KEY"`
+	DatabaseUrl  string `mapstructure:"DATABASE_URL"`
 }
 
 func Load() (*Config, error) {
@@ -30,6 +32,9 @@ func Load() (*Config, error) {
 	if err := viper.BindEnv("OPENAI_API_KEY"); err != nil {
 		return nil, err
 	}
+	if err := viper.BindEnv("SMS_API_KEY"); err != nil {
+		return nil, err
+	}
 
 	// تلاش برای خواندن فایل پیکربندی
 	if err := viper.ReadInConfig(); err != nil {
@@ -48,9 +53,11 @@ func Load() (*Config, error) {
 	if cfg.GapAPIKey == "" {
 		return nil, fmt.Errorf("GAP_API_KEY is required but was empty")
 	}
-	// اصلاح: نام کلید رو توی ارورها هم دقیق بنویس که موقع دیباگ اذیت نشی
 	if cfg.OpenAiApiKey == "" {
 		return nil, fmt.Errorf("OPENAI_API_KEY is required but was empty")
+	}
+	if cfg.SmsApiKey == "" {
+		return nil, fmt.Errorf("SMS_API_KEY is required but was empty")
 	}
 
 	return cfg, nil

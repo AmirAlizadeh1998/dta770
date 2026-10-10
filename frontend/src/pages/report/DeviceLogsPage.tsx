@@ -129,7 +129,8 @@ const LogsTable = () => {
                 const response = await apiFetch("/api/devices", {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
-                const data = await response.json();
+                const data: Device[] = await response.json();
+
                 setDevices(data);
             } catch (error) {
                 console.error("خطا در دریافت لیست دستگاه‌ها:", error);

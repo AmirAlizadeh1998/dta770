@@ -2,8 +2,6 @@ import type {DeviceDetails, DeviceDetailsResponse} from "../../models/device";
 import {FormatSignalQuality, FormatToJalali, FormatWorkClock} from "../../utils/Formatters";
 import {CURRENT_CARDS, POWER_CARDS, VOLTAGE_CARDS, FRQ_CARDS} from "../../models/consts.ts"
 
-
-
 export const TimeInfoTable = ({deviceDetails, deviceStatus, isMissionEnded}: {
     deviceDetails: DeviceDetailsResponse,
     deviceStatus: 'unknown' | 'offline' | 'online',

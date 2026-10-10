@@ -9,7 +9,8 @@ import {
     MdPeople,
     MdPerson,
     MdMenu,
-    MdClose
+    MdClose,
+    MdSettings
 } from "react-icons/md";
 import ActiveDevicesView from "./devices/ActiveDevicesView.tsx";
 import DeviceManagePage from "./devices/DeviceManagePage.tsx";
@@ -22,8 +23,8 @@ import { UserProfilePage } from "./profile/UserProfilePage.tsx";
 import AiFileAnalyzePage from "./report/AiFileAnalyzePage.tsx";
 import type { DeviceMonitorSelection } from "../models/device.ts";
 import DeviceListPage from "./devices/DeviceListPage.tsx";
+import ParameterLimitsPage from "./ParameterLimitsPage.tsx";
 
-// 1️⃣ تعریف اینترفیس منو با تایپ معتبر رول‌ها
 interface MenuItem {
     label: string;
     icon?: React.ReactNode;
@@ -36,14 +37,13 @@ interface MenuItem {
     }[];
 }
 
-// 2️⃣ مشخص کردن تایپ MenuItem[] برای menuItems
 const menuItems: MenuItem[] = [
     {
         label: "دستگاه ها",
         icon: <MdDevices className="text-xl"/>,
-        roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER],
+        roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER, UserRole.SuperUser],
         children: [
-            { label: "لیست دستگاه ها", view: "devices-list", roles: [UserRole.USER] },
+            { label: "لیست دستگاه ها", view: "devices-list", roles: [UserRole.USER, UserRole.SuperUser] },
             { label: "دستگاه های فعال", view: "devices-active", roles: [UserRole.ADMIN, UserRole.INSTALLER] },
             { label: "مدیریت دستگاه ها", view: "devices-manage", roles: [UserRole.ADMIN, UserRole.INSTALLER] },
         ],
@@ -51,12 +51,20 @@ const menuItems: MenuItem[] = [
     {
         label: "گزارشات",
         icon: <MdAssessment className="text-xl"/>,
-        roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER],
+        roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser],
         children: [
-            { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT] },
-            { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
-            { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER] },
+            { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.SuperUser] },
+            { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser] },
+            { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser] },
             { label: "تحلیل با هوش مصنوعی", view: "analyze-ai", roles: [UserRole.ADMIN] },
+        ],
+    },
+    {
+        label: "تنظیمات",
+        icon: <MdSettings className="text-xl"/>,
+        roles: [UserRole.ADMIN],
+        children: [
+            { label: "حدود مجاز پارامترها", view: "parameter-limits", roles: [UserRole.ADMIN] },
         ],
     },
     {
@@ -71,12 +79,11 @@ const menuItems: MenuItem[] = [
     {
         label: "پروفایل",
         icon: <MdPerson className="text-xl"/>,
-        roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER],
+        roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.USER, UserRole.SuperUser],
         view: "profile",
     }
 ];
 
-// 🛠️ تابع تمیز برای اکسترکت رول معتبر از توکن
 function getUserRoleFromToken(): UserRoleType {
     const token = localStorage.getItem("token");
     if (token) {
@@ -93,18 +100,16 @@ function getUserRoleFromToken(): UserRoleType {
 }
 
 export function Dashboard() {
-    // 🎯 دریافت رول هنگام اولین رندر
     const [userRole] = useState<UserRoleType>(() => getUserRoleFromToken());
 
-    // 🎯 مقداردهی صفحه پیش‌فرض: اگه یوزر عادی بود میره لیست، بقیه فعال
     const [activeView, setActiveView] = useState<string>(() => {
-        return userRole === UserRole.USER ? "devices-list" : "devices-active";
+        return userRole === UserRole.USER || userRole === UserRole.SuperUser ? "devices-list" : "devices-active";
     });
 
-    const [openMenu, setOpenMenu] = useState<number | null>(0)
-    const [activeDevice, setActiveDevice] = useState<DeviceMonitorSelection | null>(null)
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-    const navigate = useNavigate()
+    const [openMenu, setOpenMenu] = useState<number | null>(0);
+    const [activeDevice, setActiveDevice] = useState<DeviceMonitorSelection | null>(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const navigate = useNavigate();
 
     const filteredMenu = useMemo(() => {
         return menuItems
@@ -121,56 +126,56 @@ export function Dashboard() {
             .filter(item => (item.children && item.children.length > 0) || item.view);
     }, [userRole]);
 
-    const viewToMenuIndex: Record<string, number> = {}
+    const viewToMenuIndex: Record<string, number> = {};
     filteredMenu.forEach((menu, index) => {
         if (menu.children) {
             menu.children.forEach((child) => {
-                viewToMenuIndex[child.view] = index
-            })
+                viewToMenuIndex[child.view] = index;
+            });
         } else if (menu.view) {
-            viewToMenuIndex[menu.view] = index
+            viewToMenuIndex[menu.view] = index;
         }
-    })
+    });
 
     const handleLogout = () => {
-        localStorage.removeItem("token")
-        localStorage.removeItem("role")
-        navigate("/", { replace: true })
-    }
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        navigate("/", { replace: true });
+    };
 
     const toggleMenu = (index: number) => {
-        setOpenMenu((prev) => (prev === index ? null : index))
-    }
+        setOpenMenu((prev) => (prev === index ? null : index));
+    };
 
     const handleMenuClick = (view: string) => {
-        setActiveView(view)
-        setIsMobileMenuOpen(false) // بستن منو در موبایل پس از انتخاب ویو
-    }
+        setActiveView(view);
+        setIsMobileMenuOpen(false);
+    };
 
     useEffect(() => {
         const handler = (e: any) => {
             if (typeof e.detail === "string") {
-                setActiveDevice({ deviceName: "", imei: e.detail })
+                setActiveDevice({ deviceName: "", imei: e.detail });
             } else if (e.detail?.imei) {
                 setActiveDevice({
                     deviceName: e.detail.deviceName || "",
                     imei: e.detail.imei
-                })
+                });
             }
-            setActiveView("monitor")
-            setIsMobileMenuOpen(false)
-        }
+            setActiveView("monitor");
+            setIsMobileMenuOpen(false);
+        };
 
-        window.addEventListener("monitor-device", handler)
-        return () => window.removeEventListener("monitor-device", handler)
-    }, [])
+        window.addEventListener("monitor-device", handler);
+        return () => window.removeEventListener("monitor-device", handler);
+    }, []);
 
     useEffect(() => {
-        const menuIndex = viewToMenuIndex[activeView]
+        const menuIndex = viewToMenuIndex[activeView];
         if (menuIndex !== undefined) {
-            setOpenMenu(menuIndex)
+            setOpenMenu(menuIndex);
         }
-    }, [activeView, filteredMenu])
+    }, [activeView, filteredMenu]);
 
     function renderContent() {
         let currentViewConfig = null;
@@ -198,28 +203,28 @@ export function Dashboard() {
         }
 
         switch (activeView) {
-            case "devices-list": return <DeviceListPage />
-            case "devices-active": return <ActiveDevicesView />
-            case "devices-manage": return <DeviceManagePage />
-            case "users-list": return <UsersListView />
-            case "users-roles": return <UsersRolesView />
-            case "logs": return <LogsTable />
-            case "monitor": return <DeviceMonitorPage initialDevice={activeDevice} />
-            case "analyze": return <DataAnalyzePage/>
-            case "analyze-ai": return <AiFileAnalyzePage/>
-            case "profile": return <UserProfilePage/>
+            case "devices-list": return <DeviceListPage />;
+            case "devices-active": return <ActiveDevicesView />;
+            case "devices-manage": return <DeviceManagePage />;
+            case "parameter-limits": return <ParameterLimitsPage />; // 👈 رندر صفحه لیمیت‌ها
+            case "users-list": return <UsersListView />;
+            case "users-roles": return <UsersRolesView />;
+            case "logs": return <LogsTable />;
+            case "monitor": return <DeviceMonitorPage initialDevice={activeDevice} />;
+            case "analyze": return <DataAnalyzePage/>;
+            case "analyze-ai": return <AiFileAnalyzePage/>;
+            case "profile": return <UserProfilePage/>;
             default:
                 return (
                     <div className="flex items-center justify-center h-full p-4">
                         <p className="text-lg text-gray-500">این بخش هنوز آماده نشده. 🚧</p>
                     </div>
-                )
+                );
         }
     }
 
     return (
         <div dir="rtl" className="flex flex-col md:flex-row min-h-screen bg-gray-50 relative">
-
             {/* هدر موبایل */}
             <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 shadow-sm z-20">
                 <h2 className="text-xl font-bold text-gray-800">داشبورد</h2>
@@ -268,13 +273,13 @@ export function Dashboard() {
                 <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                     {filteredMenu.map((item, index) => {
                         if (!item.children || item.children.length === 0) {
-                            const isActive = activeView === item.view
+                            const isActive = activeView === item.view;
                             return (
                                 <button
                                     key={item.label}
                                     onClick={() => {
-                                        if(item.view) handleMenuClick(item.view)
-                                        setOpenMenu(null)
+                                        if(item.view) handleMenuClick(item.view);
+                                        setOpenMenu(null);
                                     }}
                                     className={`w-full flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
                                         isActive
@@ -285,10 +290,10 @@ export function Dashboard() {
                                     <span>{item.icon}</span>
                                     <span>{item.label}</span>
                                 </button>
-                            )
+                            );
                         }
 
-                        const isOpen = openMenu === index
+                        const isOpen = openMenu === index;
                         return (
                             <div key={item.label}>
                                 <button
@@ -307,7 +312,7 @@ export function Dashboard() {
                                 <div className={`overflow-hidden transition-all duration-200 ${isOpen ? "max-h-60" : "max-h-0"}`}>
                                     <div className="mt-1 mr-4 pr-3 border-r border-gray-200 space-y-1">
                                         {item.children.map((child) => {
-                                            const isActive = activeView === child.view
+                                            const isActive = activeView === child.view;
                                             return (
                                                 <button
                                                     key={child.label}
@@ -320,12 +325,12 @@ export function Dashboard() {
                                                 >
                                                     {child.label}
                                                 </button>
-                                            )
+                                            );
                                         })}
                                     </div>
                                 </div>
                             </div>
-                        )
+                        );
                     })}
                 </nav>
             </aside>
@@ -335,5 +340,5 @@ export function Dashboard() {
                 {renderContent()}
             </main>
         </div>
-    )
+    );
 }

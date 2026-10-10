@@ -24,7 +24,7 @@ func MainMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if r.URL.Path != "/api/login" && r.URL.Path != "/api/test-sensor" && r.URL.Path != "/api/get-device-logs" {
+		if r.URL.Path != "/api/login" && r.URL.Path != "/api/test-sensor" {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
 				http.Error(w, "توکن مفقود است!", http.StatusUnauthorized)
@@ -61,8 +61,15 @@ func MainMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				}
 
 				// ۲. چک کردن آیدی به صورت مستقل
-				if id, ok := claims["user_id"]; ok {
-					ctx = context.WithValue(ctx, "user_id", id)
+				if idVal, ok := claims["user_id"]; ok {
+					var uid int
+					switch v := idVal.(type) {
+					case float64:
+						uid = int(v)
+					case int:
+						uid = v
+					}
+					ctx = context.WithValue(ctx, "user_id", uid)
 				}
 
 				// ۳. در نهایت ریکوئست رو با کانتکست جدید آپدیت می‌کنیم

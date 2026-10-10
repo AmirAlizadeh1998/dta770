@@ -102,26 +102,11 @@ func (b *pingFilterBody) Read(p []byte) (int, error) {
 	}
 }
 
-func usersRouter(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		handlers.GetUsersHandler(w, r)
-	case http.MethodPost:
-		handlers.CreateUserHandler(w, r)
-	case http.MethodPut:
-		handlers.UpdateUserHandler(w, r)
-	case http.MethodDelete:
-		handlers.DeleteUserHandler(w, r)
-	default:
-		http.Error(w, "متد غیرمجاز", http.StatusMethodNotAllowed)
-	}
-}
-
 //go:embed dist
 var frontend embed.FS
 
 func main() {
-	// ۱. لود کردن کانفیگ
+	// لود کردن کانفیگ
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -131,18 +116,18 @@ func main() {
 		Transport: &gapGPTTransport{Base: http.DefaultTransport},
 	}
 
-	// ۲. ساخت کلاینت رسمی OpenAI با BaseURL سفارشی GapGPT
+	// ساخت کلاینت رسمی OpenAI با BaseURL سفارشی GapGPT
 	gapGptClient := openai.NewClient(
 		option.WithHTTPClient(filteredHTTPClient),
 		option.WithBaseURL("https://api.gapgpt.app/v1"),
 		option.WithAPIKey(cfg.GapAPIKey),
 	)
 
-	// ۳. اجرای دیتابیس
+	// اجرای دیتابیس
 	database.InitDB()
 	worker.StartDeviceDeactivationWorker(database.DB)
 
-	// ۴. تنظیم روت‌ها
+	// تنظیم روت‌ها
 	mux := http.NewServeMux()
 
 	// --- بخش فرانت‌اند (SPA fallback) ---
@@ -171,9 +156,8 @@ func main() {
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
 	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
-	//mux.HandleFunc("/api/ai/chat", middleware.MainMiddleware(handlers.AiChatHandler(&gapGptClient)))
 	mux.HandleFunc("/api/ai/file-search", middleware.MainMiddleware(handlers.AiFileAnalyzeHandler(&gapGptClient)))
-	mux.HandleFunc("/api/users", middleware.MainMiddleware(usersRouter))
+	mux.HandleFunc("/api/users", middleware.MainMiddleware(handlers.UsersRouter))
 	mux.HandleFunc("/api/users/profile", middleware.MainMiddleware(handlers.UserProfileHandler))
 	mux.HandleFunc("/api/roles", middleware.MainMiddleware(handlers.RolesHandler))
 	mux.HandleFunc("/api/devices/active", middleware.MainMiddleware(handlers.GetActiveDevicesHandler))
@@ -186,6 +170,9 @@ func main() {
 	mux.HandleFunc("/api/monitor/chart", middleware.MainMiddleware(handlers.GetDeviceChartData))
 	mux.HandleFunc("/api/get-device-logs", middleware.MainMiddleware(handlers.GetDeviceLogs))
 	mux.HandleFunc("/api/export-device-logs", middleware.MainMiddleware(handlers.ExportDeviceLogsHandler))
+	mux.HandleFunc("/api/parameters", middleware.MainMiddleware(handlers.GetParametersHandler))
+	mux.HandleFunc("/api/limits", middleware.MainMiddleware(handlers.LimitsRouter))
+	mux.HandleFunc("/api/limits/", middleware.MainMiddleware(handlers.LimitsRouter))
 
 	fmt.Println("🚀 Server running on http://localhost:8080 ...")
 	log.Fatal(http.ListenAndServe(":8080", mux))

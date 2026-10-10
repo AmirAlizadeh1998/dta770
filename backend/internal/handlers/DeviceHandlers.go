@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type PaginatedLogsResponse struct {
@@ -40,7 +42,7 @@ func DevicesHandler(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodGet:
 		// ✅ همه نقش‌ها میتونن لیست ببینن
-		if role != models.RoleAdmin && role != models.RoleInstaller && role != models.RoleUser {
+		if role != models.RoleAdmin && role != models.RoleInstaller && role != models.RoleUser && role != models.RoleSuperUser {
 			http.Error(w, "اجازه دسترسی ندارید", http.StatusForbidden)
 			return
 		}
@@ -84,20 +86,26 @@ func DevicesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
+	// ۱. استخراج اطلاعات کاربر (نقش و شناسه) از کانتکست
+	userRole, _ := r.Context().Value("userRole").(string)
+	userID, _ := r.Context().Value("user_id").(int)
+
+	isAdmin := strings.EqualFold(userRole, "Admin")
+
 	// گرفتن پارامترهای کوئری از فرانت
 	q := r.URL.Query()
 	pageStr := q.Get("page")
 	limitStr := q.Get("limit")
 	imei := q.Get("imei")
-	deviceName := q.Get("deviceName") // ✨ اضافه شدن دریافت نام دستگاه
+	deviceName := q.Get("deviceName")
 	startDate := q.Get("startDate")
 	endDate := q.Get("endDate")
 
-	// گرفتن پارامترهای سورت
+	// مرتب سازی
 	sortBy := q.Get("sortBy")
 	sortOrder := q.Get("sortOrder")
 
-	// مقادیر پیش‌فرض
+	// مقادیر پیش‌فرض صفحه‌بندی
 	page := 1
 	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 		page = p
@@ -111,19 +119,19 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 	paramCount := 1
 
-	// ✨ لاجیک جدید: جستجو بر اساس ترکیب imei و deviceName
-	if imei != "" && deviceName != "" {
-		var deviceCode string
+	// ✨ ۲. مدیریت دسترسی و فیلتر دستگاه:
+	if !isAdmin {
+		// اگر کاربر عادی بود:
+		if imei != "" && deviceName != "" {
+			// چک می‌کنیم حتماً دستگاه متعلق به همین کاربر باشه
+			var deviceCode string
+			err := database.DB.QueryRow(
+				"SELECT device_code FROM devices WHERE imei = $1 AND device_name = $2 AND user_id = $3",
+				imei, deviceName, userID,
+			).Scan(&deviceCode)
 
-		// ✨ پیدا کردن device_code از جدول devices بر اساس ترکیب imei و device_name
-		err := database.DB.QueryRow(
-			"SELECT device_code FROM devices WHERE imei = $1 AND device_name = $2",
-			imei, deviceName,
-		).Scan(&deviceCode)
-
-		if err != nil {
-			if err == sql.ErrNoRows {
-				// اگه این ترکیب پیدا نشد، یعنی لاگی هم نداره! یه ریسپانس خالی برمی‌گردونیم
+			if err != nil {
+				// دستگاه پیدا نشد یا مال این کاربر نیست -> خروجی خالی
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(PaginatedLogsResponse{
 					Logs:        []models.Logs{},
@@ -133,22 +141,35 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			log.Printf("Error fetching device_code for IMEI %s and Name %s: %v", imei, deviceName, err)
-			http.Error(w, "خطای داخلی در اعتبارسنجی دستگاه", http.StatusInternalServerError)
-			return
-		}
 
-		// ✨ حالا با خیال راحت فیلتر می‌زنیم روی customer_id با استفاده از device_code پیدا شده
-		conditions = append(conditions, fmt.Sprintf("data->>'customer_id' = $%d", paramCount))
-		args = append(args, deviceCode)
-		paramCount++
-	} else if imei != "" || deviceName != "" {
-		// ✨ اگه فقط یکی از این دو تا ارسال شده بود و اون یکی خالی بود، می‌تونی ارور بدی چون جفتش برای پیدا کردن کلید یونیک لازمه
-		http.Error(w, "برای جستجوی دستگاه، ارسال هر دو پارامتر IMEI و نام دستگاه الزامی است", http.StatusBadRequest)
-		return
+			conditions = append(conditions, fmt.Sprintf("data->>'customer_id' = $%d", paramCount))
+			args = append(args, deviceCode)
+			paramCount++
+		} else {
+			// کاربر عادی دستگاه خاصی انتخاب نکرده، پس فقط دستگاه‌های خودش رو ببینه
+			conditions = append(conditions, fmt.Sprintf("data->>'customer_id' IN (SELECT device_code FROM devices WHERE user_id = $%d)", paramCount))
+			args = append(args, userID)
+			paramCount++
+		}
+	} else {
+		// ✨ ادمین: هیچ اجباری نیست و پیش‌فرض همه رو می‌بینه.
+		// اما اگر ادمین از فرانت «دستگاه خاصی» رو انتخاب کرد، می‌تونه فیلترش کنه:
+		if imei != "" && deviceName != "" {
+			var deviceCode string
+			err := database.DB.QueryRow(
+				"SELECT device_code FROM devices WHERE imei = $1 AND device_name = $2",
+				imei, deviceName,
+			).Scan(&deviceCode)
+
+			if err == nil {
+				conditions = append(conditions, fmt.Sprintf("data->>'customer_id' = $%d", paramCount))
+				args = append(args, deviceCode)
+				paramCount++
+			}
+		}
 	}
 
-	// بقیه فیلترها (تاریخ و ...)
+	// ۳. فیلترهای اختیاری تاریخ (برای هر دو نقش اگه فرستاده باشن اعمال بشه)
 	if startDate != "" {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", paramCount))
 		args = append(args, startDate)
@@ -166,7 +187,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// ۱. کوئری گرفتن تعداد کل رکوردها
+	// ۴. کوئری گرفتن تعداد کل رکوردها
 	var totalLogs int
 	countQuery := "SELECT COUNT(*) FROM device_logs " + whereClause
 	err := database.DB.QueryRow(countQuery, args...).Scan(&totalLogs)
@@ -182,7 +203,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := int((page - 1) * limit)
 
-	// ۲. مدیریت سورت
+	// ۵. مدیریت سورت
 	orderDirection := "DESC"
 	if strings.ToLower(sortOrder) == "asc" {
 		orderDirection = "ASC"
@@ -197,8 +218,11 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 
 	orderByClause := fmt.Sprintf("ORDER BY %s %s", orderColumn, orderDirection)
 
-	// ۳. کوئری گرفتن لاگ‌های همون صفحه
-	dataQuery := "SELECT id, created_at, data FROM device_logs " + whereClause + " " + orderByClause + fmt.Sprintf(" LIMIT $%d OFFSET $%d", paramCount, paramCount+1)
+	// ۶. کوئری گرفتن لاگ‌های صفحه جاری
+	dataQuery := fmt.Sprintf(
+		"SELECT id, created_at, data FROM device_logs %s %s LIMIT $%d OFFSET $%d",
+		whereClause, orderByClause, paramCount, paramCount+1,
+	)
 	args = append(args, limit, offset)
 
 	rows, err := database.DB.Query(dataQuery, args...)
@@ -207,12 +231,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			log.Printf("Error closing rows in GetDeviceLogs: %v", err)
-		}
-	}(rows)
+	defer rows.Close()
 
 	var logs []models.Logs
 	for rows.Next() {
@@ -236,7 +255,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		logs = []models.Logs{}
 	}
 
-	// ۴. آماده کردن جواب نهایی
+	// ۷. ریسپانس نهایی
 	response := PaginatedLogsResponse{
 		Logs:        logs,
 		CurrentPage: page,
@@ -245,10 +264,8 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding device logs response: %v", err)
-		return
 	}
 }
 
@@ -261,20 +278,20 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 			d.owner_name, 
 			d.imei,
 			d.end_time,
-			l.created_at AS last_seen_at,
-			l.data->>'acin' AS acin
-		FROM 
-			devices d
-		JOIN LATERAL (
-			SELECT created_at, data 
-			FROM device_logs 
-			-- ✨ تغییر اصلی اینجاست: مچ کردن با استفاده از device_code و customer_id
-			WHERE data->>'customer_id' = d.device_code::text
-			  AND NULLIF(BTRIM(d.device_code::text), '') IS NOT NULL
-			ORDER BY created_at DESC 
-			LIMIT 1
-		) l ON true
-		WHERE l.created_at >= NOW() - INTERVAL '10 minutes'
+			latest_logs.created_at AS last_seen_at,
+			latest_logs.data->>'acin' AS acin
+		FROM (
+			-- اول فقط لاگ‌های ۱۰ دقیقه اخیر رو با بیشترین تاریخ برای هر دستگاه جدا می‌کنیم
+			SELECT DISTINCT ON (data->>'customer_id') 
+				data->>'customer_id' AS customer_id,
+				created_at,
+				data
+			FROM device_logs
+			WHERE created_at >= NOW() - INTERVAL '10 minutes'
+			  AND data->>'customer_id' IS NOT NULL
+			ORDER BY (data->>'customer_id'), created_at DESC
+		) latest_logs
+		JOIN devices d ON d.device_code::text = latest_logs.customer_id;
 	`)
 	if err != nil {
 		log.Printf("active devices query error: %v", err)
@@ -386,32 +403,27 @@ func extractDeviceID(path string) (int, error) {
 }
 
 func handleGetDevices(w http.ResponseWriter, r *http.Request) {
-	// ۱. استخراج اطلاعات کاربر از توکن (Context)
-	// نکته: این خطوط رو بر اساس سیستم احراز هویت (Middleware) خودت تنظیم کن
-	// مثلاً ممکنه اسم کلیدها توی کانتکستت فرق کنه یا متد دیگه‌ای برای گرفتنشون داشته باشی
-	userID := r.Context().Value("user_id") // آیدی کاربر
-	role := r.Context().Value("userRole")  // نقش کاربر (مثلاً "admin" یا "user")
+	userID := r.Context().Value("user_id")
+	role := r.Context().Value("userRole")
 
-	// ۲. کوئری پایه بدون شرط
+	// ستون alert_phones اضافه شد
 	baseQuery := `
 		SELECT 
 			id, device_name, device_code, owner_name, imei, phone, address,
 			fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 			distance_from_trans, cable_size, three_phase, materials,
-			description, is_active, start_time, end_time, alarm, deactivated_at
+			description, is_active, start_time, end_time, alarm, deactivated_at,
+			COALESCE(alert_phones, '{}') AS alert_phones
 		FROM devices
 	`
 
 	var rows *sql.Rows
 	var err error
 
-	// ۳. داینامیک کردن کوئری بر اساس نقش کاربر
 	if role == "Admin" {
-		// اگه ادمین بود، همه رو نشون بده
 		query := baseQuery + " ORDER BY id DESC"
 		rows, err = database.DB.Query(query)
 	} else {
-		// اگه کاربر عادی بود، فقط دستگاه‌هایی که user_id شون برابر آیدی خودشه رو بیار
 		query := baseQuery + " WHERE user_id = $1 ORDER BY id DESC"
 		rows, err = database.DB.Query(query, userID)
 	}
@@ -430,7 +442,6 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		var startTime, endTime, deactivatedAt sql.NullTime
 		var alarm, deviceCode sql.NullString
 
-		// اسکن کردن دقیقاً مثل کدهای خودت...
 		err := rows.Scan(
 			&d.Id,
 			&d.DeviceName,
@@ -455,6 +466,7 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 			&endTime,
 			&alarm,
 			&deactivatedAt,
+			pq.Array(&d.AlertPhones), // ✨ خواندن آرایه شماره‌ها از پستگرس
 		)
 
 		if err != nil {
@@ -477,6 +489,11 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		}
 		if deactivatedAt.Valid {
 			d.DeactivatedAt = deactivatedAt.Time.Format(time.RFC3339)
+		}
+
+		// برای اینکه اگه خالی بود توی json خروجی [] بده نه null
+		if d.AlertPhones == nil {
+			d.AlertPhones = []string{}
 		}
 
 		devices = append(devices, d)
@@ -542,19 +559,25 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 				device_name, owner_name, imei, start_time, end_time, phone, address,
 				fuse_box, null_connection, fuse_comb, line_balance, unit_earth, ups_battery,
 				distance_from_trans, cable_size, three_phase, materials,
-				description, is_active, device_code, deactivated_at, user_id
+				description, is_active, device_code, deactivated_at, user_id,
+				alert_phones
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7, $8,
 				$9, $10, $11, $12, $13, $14,
 				$15, $16, $17, $18,
 				$19, $20, 
 				CASE WHEN $19 = false THEN CURRENT_TIMESTAMP END,
-				$21
+				$21,
+				$22
 			)
 			RETURNING id
 		`
 
 	var newID int
+
+	if d.AlertPhones == nil {
+		d.AlertPhones = []string{}
+	}
 
 	err = database.DB.QueryRow(
 		query,
@@ -578,7 +601,8 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		d.Description,
 		d.IsActive,
 		d.DeviceCode,
-		d.UserID, // پوینتر به int64 تا در صورت nil بودن، NULL ذخیره شود
+		d.UserID,
+		pq.Array(d.AlertPhones), // ✨ پارامتر $22: ذخیره آرایه در دیتابیس
 	).Scan(&newID)
 
 	if err != nil {
@@ -688,17 +712,22 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 			description = $17,
 			is_active = $18,
 			deactivated_at = CASE 
-				WHEN is_active = true AND $18 = false THEN CURRENT_TIMESTAMP -- تازه تیکش برداشته شده
-				WHEN $18 = true THEN NULL -- دوباره تیک خورده و فعال شده
-				ELSE deactivated_at -- تغییری نکرده، همون تاریخ قبلی بمونه
+				WHEN is_active = true AND $18 = false THEN CURRENT_TIMESTAMP
+				WHEN $18 = true THEN NULL 
+				ELSE deactivated_at 
 			END,
 			updated_at = $19,
 			alarm = $20,
 			owner_name = $21,
 			device_code = $22,
-			user_id = $23
-		WHERE id = $24     
+			user_id = $23,
+			alert_phones = $24
+		WHERE id = $25     
 	`
+
+	if d.AlertPhones == nil {
+		d.AlertPhones = []string{}
+	}
 
 	result, err := database.DB.Exec(
 		query,
@@ -724,8 +753,9 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		d.Alarm,
 		d.OwnerName,
 		d.DeviceCode,
-		d.UserID, // این فیلد پوینتر هست (*int64 یا *int) تا در صورت null بودن، NULL ذخیره بشه
-		id,       // شرط WHERE id = $24
+		d.UserID,
+		pq.Array(d.AlertPhones), // ✨ پارامتر $24
+		id,                      // ✨ پارامتر $25 برای WHERE id = $25
 	)
 
 	if err != nil {
