@@ -24,6 +24,8 @@ import AiFileAnalyzePage from "./report/AiFileAnalyzePage.tsx";
 import type { DeviceMonitorSelection } from "../models/device.ts";
 import DeviceListPage from "./devices/DeviceListPage.tsx";
 import ParameterLimitsPage from "./ParameterLimitsPage.tsx";
+import FinalReportPage from "./report/FinalReportPage.tsx";
+import AdminFinalReportPage from "./report/AdminFinalReportPage.tsx";
 
 interface MenuItem {
     label: string;
@@ -56,6 +58,8 @@ const menuItems: MenuItem[] = [
             { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.SuperUser] },
             { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser] },
             { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser] },
+            { label: "درخواست گزارش نهایی", view: "final-report", roles: [/*UserRole.ADMIN,*/ UserRole.SuperUser] },
+            { label: "بررسی درخواست های گزارش نهایی", view: "handle-final-report", roles: [UserRole.ADMIN] },
             { label: "تحلیل با هوش مصنوعی", view: "analyze-ai", roles: [UserRole.ADMIN] },
         ],
     },
@@ -206,12 +210,14 @@ export function Dashboard() {
             case "devices-list": return <DeviceListPage />;
             case "devices-active": return <ActiveDevicesView />;
             case "devices-manage": return <DeviceManagePage />;
-            case "parameter-limits": return <ParameterLimitsPage />; // 👈 رندر صفحه لیمیت‌ها
+            case "parameter-limits": return <ParameterLimitsPage />;
             case "users-list": return <UsersListView />;
             case "users-roles": return <UsersRolesView />;
             case "logs": return <LogsTable />;
             case "monitor": return <DeviceMonitorPage initialDevice={activeDevice} />;
             case "analyze": return <DataAnalyzePage/>;
+            case "final-report": return <FinalReportPage />;
+            case "handle-final-report": return <AdminFinalReportPage />
             case "analyze-ai": return <AiFileAnalyzePage/>;
             case "profile": return <UserProfilePage/>;
             default:
@@ -309,24 +315,26 @@ export function Dashboard() {
                                     </span>
                                 </button>
 
-                                <div className={`overflow-hidden transition-all duration-200 ${isOpen ? "max-h-60" : "max-h-0"}`}>
-                                    <div className="mt-1 mr-4 pr-3 border-r border-gray-200 space-y-1">
-                                        {item.children.map((child) => {
-                                            const isActive = activeView === child.view;
-                                            return (
-                                                <button
-                                                    key={child.label}
-                                                    onClick={() => handleMenuClick(child.view)}
-                                                    className={`block w-full text-right px-3 py-2 rounded-lg text-sm transition ${
-                                                        isActive
-                                                            ? "bg-blue-50 text-blue-600 font-medium"
-                                                            : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
-                                                    }`}
-                                                >
-                                                    {child.label}
-                                                </button>
-                                            );
-                                        })}
+                                <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                                    <div className="overflow-hidden">
+                                        <div className="mt-1 mr-4 pr-3 border-r border-gray-200 space-y-1">
+                                            {item.children.map((child) => {
+                                                const isActive = activeView === child.view;
+                                                return (
+                                                    <button
+                                                        key={child.label}
+                                                        onClick={() => handleMenuClick(child.view)}
+                                                        className={`block w-full text-right px-3 py-2 rounded-lg text-sm transition ${
+                                                            isActive
+                                                                ? "bg-blue-50 text-blue-600 font-medium"
+                                                                : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
+                                                        }`}
+                                                    >
+                                                        {child.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

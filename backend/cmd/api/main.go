@@ -14,6 +14,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -130,6 +132,14 @@ func main() {
 	// تنظیم روت‌ها
 	mux := http.NewServeMux()
 
+	uploadsReportDir := filepath.Join(cfg.UploadDir, "reports")
+	if err := os.MkdirAll(uploadsReportDir, os.ModePerm); err != nil {
+		log.Printf("هشدار: ایجاد دایرکتوری آپلود با خطا مواجه شد: %v", err)
+	}
+
+	uploadFS := http.FileServer(http.Dir(cfg.UploadDir))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", uploadFS))
+
 	// --- بخش فرانت‌اند (SPA fallback) ---
 	distFs, err := fs.Sub(frontend, "dist")
 	if err != nil {
@@ -152,7 +162,6 @@ func main() {
 
 		fileServer.ServeHTTP(w, r)
 	})
-	// ----------------------------------------
 
 	mux.HandleFunc("/api/me", middleware.MainMiddleware(handlers.MeHandler))
 	mux.HandleFunc("/api/login", middleware.MainMiddleware(handlers.LoginHandler))
@@ -173,6 +182,11 @@ func main() {
 	mux.HandleFunc("/api/parameters", middleware.MainMiddleware(handlers.GetParametersHandler))
 	mux.HandleFunc("/api/limits", middleware.MainMiddleware(handlers.LimitsRouter))
 	mux.HandleFunc("/api/limits/", middleware.MainMiddleware(handlers.LimitsRouter))
+	mux.HandleFunc("/api/final-report", middleware.MainMiddleware(handlers.FinalReportHandler))
+	mux.HandleFunc("/api/final-report/", middleware.MainMiddleware(handlers.FinalReportHandler))
+	mux.HandleFunc("/api/admin/final-report/upload", middleware.MainMiddleware(handlers.AdminUploadReportPDFHandler(cfg)))
+	mux.HandleFunc("/api/admin/final-report", middleware.MainMiddleware(handlers.AdminFinalReportHandler))
+	mux.HandleFunc("/api/admin/final-report/", middleware.MainMiddleware(handlers.AdminFinalReportHandler))
 
 	fmt.Println("🚀 Server running on http://localhost:8080 ...")
 	log.Fatal(http.ListenAndServe(":8080", mux))

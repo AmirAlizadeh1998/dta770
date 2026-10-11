@@ -12,6 +12,7 @@ type Config struct {
 	OpenAiApiKey string `mapstructure:"OPENAI_API_KEY"`
 	SmsApiKey    string `mapstructure:"SMS_API_KEY"`
 	DatabaseUrl  string `mapstructure:"DATABASE_URL"`
+	UploadDir    string `mapstructure:"UPLOAD_DIR"`
 }
 
 func Load() (*Config, error) {
@@ -58,6 +59,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.SmsApiKey == "" {
 		return nil, fmt.Errorf("SMS_API_KEY is required but was empty")
+	}
+	if cfg.UploadDir == "" {
+		return nil, fmt.Errorf("UPLOAD_DIR is required but was empty")
 	}
 
 	return cfg, nil
