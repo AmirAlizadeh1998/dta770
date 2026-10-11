@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush, Legend
+    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush
 } from 'recharts';
 import Select from 'react-select';
 
@@ -30,6 +30,7 @@ interface ParameterGroupOption {
     value: string;
     label: string;
     isGroup: boolean;
+    isHarmonicBar?: boolean; // فلگ تشخیص نمودار میله‌ای هارمونیک
     phases?: PhaseConfig[];
 }
 
@@ -39,98 +40,375 @@ const PHASE_COLORS = {
     t: '#3b82f6', // آبی - فاز T (L3)
 };
 
-// گزینه‌های اختصاصی سه فاز (ولتاژ و جریان)
+const ODD_HARMONICS = [1, 3, 5, 7, 9, 11, 13, 15];
+
 const MULTI_PHASE_OPTIONS: ParameterGroupOption[] = [
+    ///////////////////////// طیف هارمونیک‌های فرد ///////////////////
+    {
+        value: 'grp_odd_harmonics_bar',
+        label: '📊 هارمونیک‌های فرد (%)',
+        isGroup: true,
+        isHarmonicBar: true,
+        phases: [
+            { key: 'r', param: 'harmonic_odd_R', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'harmonic_odd_S', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'harmonic_odd_T', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// جریان ///////////////////
     {
         value: 'grp_current_cur',
-        label: '⚡ جریان لحظه‌ای هر ۳ فاز (ir_cur, is_cur, it_cur)',
+        label: '⚡ جریان لحظه‌ای (A)',
         isGroup: true,
         phases: [
-            { key: 'r', param: 'ir_cur', label: 'فاز R (ir_cur)', color: PHASE_COLORS.r },
-            { key: 's', param: 'is_cur', label: 'فاز S (is_cur)', color: PHASE_COLORS.s },
-            { key: 't', param: 'it_cur', label: 'فاز T (it_cur)', color: PHASE_COLORS.t },
+            { key: 'r', param: 'ir_cur', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'is_cur', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'it_cur', label: 'فاز T', color: PHASE_COLORS.t },
         ]
     },
     {
         value: 'grp_current_ave',
-        label: '⚡ جریان میانگین هر ۳ فاز (ir_ave, is_ave, it_ave)',
+        label: '⚡ جریان میانگین (A)',
         isGroup: true,
         phases: [
-            { key: 'r', param: 'ir_ave', label: 'فاز R (ir_ave)', color: PHASE_COLORS.r },
-            { key: 's', param: 'is_ave', label: 'فاز S (is_ave)', color: PHASE_COLORS.s },
-            { key: 't', param: 'it_ave', label: 'فاز T (it_ave)', color: PHASE_COLORS.t },
+            { key: 'r', param: 'ir_ave', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'is_ave', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'it_ave', label: 'فاز T', color: PHASE_COLORS.t },
         ]
     },
     {
-        value: 'grp_voltage_phase_to_neutral_cur',
-        label: '🔌 ولتاژ لحظه‌ای فاز به نول (v_rn_cur, v_sn_cur, v_tn_cur)',
+        value: 'grp_current_max',
+        label: '⚡ جریان بیشینه (A)',
         isGroup: true,
         phases: [
-            { key: 'r', param: 'v_rn_cur', label: 'فاز R-N (v_rn_cur)', color: PHASE_COLORS.r },
-            { key: 's', param: 'v_sn_cur', label: 'فاز S-N (v_sn_cur)', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_tn_cur', label: 'فاز T-N (v_tn_cur)', color: PHASE_COLORS.t },
+            { key: 'r', param: 'ir_max', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'is_max', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'it_max', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'grp_current_min',
+        label: '⚡ جریان کمینه (A)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'ir_min', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'is_min', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'it_min', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// ولتاژ فاز به نول ///////////////////
+    {
+        value: 'grp_voltage_phase_to_neutral_cur',
+        label: '🔌 ولتاژ لحظه‌ای فاز به نول (V)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'v_rn_cur', label: 'فاز R-N', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_sn_cur', label: 'فاز S-N', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_tn_cur', label: 'فاز T-N', color: PHASE_COLORS.t },
         ]
     },
     {
         value: 'grp_voltage_phase_to_neutral_ave',
-        label: '🔌 ولتاژ میانگین فاز به نول (v_rn_ave, v_sn_ave, v_tn_ave)',
+        label: '🔌 ولتاژ میانگین فاز به نول (V)',
         isGroup: true,
         phases: [
-            { key: 'r', param: 'v_rn_ave', label: 'فاز R-N (v_rn_ave)', color: PHASE_COLORS.r },
-            { key: 's', param: 'v_sn_ave', label: 'فاز S-N (v_sn_ave)', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_tn_ave', label: 'فاز T-N (v_tn_ave)', color: PHASE_COLORS.t },
+            { key: 'r', param: 'v_rn_ave', label: 'فاز R-N', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_sn_ave', label: 'فاز S-N', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_tn_ave', label: 'فاز T-N', color: PHASE_COLORS.t },
         ]
     },
+    {
+        value: 'grp_voltage_phase_to_neutral_max',
+        label: '🔌 ولتاژ بیشینه فاز به نول (V)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'v_rn_max', label: 'فاز R-N', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_sn_max', label: 'فاز S-N', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_tn_max', label: 'فاز T-N', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'grp_voltage_phase_to_neutral_min',
+        label: '🔌 ولتاژ کمینه فاز به نول (V)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'v_rn_min', label: 'فاز R-N', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_sn_min', label: 'فاز S-N', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_tn_min', label: 'فاز T-N', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// ولتاژ خط به خط ///////////////////
     {
         value: 'grp_voltage_phase_to_phase_cur',
-        label: '🔌 ولتاژ لحظه‌ای خط به خط (v_rs_cur, v_rt_cur, v_ts_cur)',
+        label: '🔌 ولتاژ لحظه‌ای خط به خط (V)',
         isGroup: true,
         phases: [
-            { key: 'r', param: 'v_rs_cur', label: 'خط R-S (v_rs_cur)', color: PHASE_COLORS.r },
-            { key: 's', param: 'v_rt_cur', label: 'خط R-T (v_rt_cur)', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_ts_cur', label: 'خط T-S (v_ts_cur)', color: PHASE_COLORS.t },
+            { key: 'r', param: 'v_rs_cur', label: 'خط R-S', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_rt_cur', label: 'خط R-T', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_st_cur', label: 'خط S-T', color: PHASE_COLORS.t },
         ]
     },
     {
-        value: 'grp_thd_current',
-        label: '📊 اعوجاج هارمونیکی جریان THD (thd_ir, thd_is, thd_it)',
+        value: 'grp_voltage_phase_to_phase_ave',
+        label: '🔌 ولتاژ میانگین خط به خط (V)',
         isGroup: true,
         phases: [
-            { key: 'r', param: 'thd_ir', label: 'فاز R (thd_ir)', color: PHASE_COLORS.r },
-            { key: 's', param: 'thd_is', label: 'فاز S (thd_is)', color: PHASE_COLORS.s },
-            { key: 't', param: 'thd_it', label: 'فاز T (thd_it)', color: PHASE_COLORS.t },
+            { key: 'r', param: 'v_rs_ave', label: 'خط R-S', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_rt_ave', label: 'خط R-T', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_st_ave', label: 'خط S-T', color: PHASE_COLORS.t },
         ]
-    }
+    },
+    {
+        value: 'grp_voltage_phase_to_phase_max',
+        label: '🔌 ولتاژ بیشینه خط به خط (V)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'v_rs_max', label: 'خط R-S', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_rt_max', label: 'خط R-T', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_st_max', label: 'خط S-T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'grp_voltage_phase_to_phase_min',
+        label: '🔌 ولتاژ کمینه خط به خط (V)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'v_rs_min', label: 'خط R-S', color: PHASE_COLORS.r },
+            { key: 's', param: 'v_rt_min', label: 'خط R-T', color: PHASE_COLORS.s },
+            { key: 't', param: 'v_st_min', label: 'خط S-T', color: PHASE_COLORS.t },
+        ]
+    },
+    /////////////////////// اعوجاج کل جریان ///////////////////
+    {
+        value: 'grp_thd_current',
+        label: '📊 اعوجاج هارمونیکی جریان (%)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'thd_ir', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'thd_is', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'thd_it', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    /////////////////////// اعوجاج کل فاز به نول ///////////////////
+    {
+        value: 'grp_thd_voltage_to_neutral',
+        label: '📊 اعوجاج هارمونیکی فاز به نول (%)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'thd_vrn', label: 'فاز R-N', color: PHASE_COLORS.r },
+            { key: 's', param: 'thd_vsn', label: 'فاز S-N', color: PHASE_COLORS.s },
+            { key: 't', param: 'thd_vtn', label: 'فاز T-N', color: PHASE_COLORS.t },
+        ]
+    },
+    /////////////////////// اعوجاج کل فاز به فاز ///////////////////
+    {
+        value: 'grp_thd_voltage_to_phase',
+        label: '📊 اعوجاج هارمونیکی خط به خط (%)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'thd_vrs', label: 'خط R-S', color: PHASE_COLORS.r },
+            { key: 's', param: 'thd_vrt', label: 'خط R-T', color: PHASE_COLORS.s },
+            { key: 't', param: 'thd_vst', label: 'خط S-T', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// ضریب توان ///////////////////
+    {
+        value: 'power_factor_cur',
+        label: '🔌 ضریب توان لحظه‌ای (PF)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'cos_r_cur', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'cos_s_cur', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'cos_t_cur', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_factor_ave',
+        label: '🔌 ضریب توان میانگین (PF)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'cos_r_ave', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'cos_s_ave', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'cos_t_ave', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_factor_max',
+        label: '🔌 ضریب توان بیشینه (PF)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'cos_r_max', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'cos_s_max', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'cos_t_max', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_factor_min',
+        label: '🔌 ضریب توان کمینه (PF)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'cos_r_min', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'cos_s_min', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'cos_t_min', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// توان اکتیو ///////////////////
+    {
+        value: 'power_active_cur',
+        label: '⚡ توان اکتیو لحظه‌ای (kW)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_act_r_cur', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_act_s_cur', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_act_t_cur', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_active_ave',
+        label: '⚡ توان اکتیو میانگین (kW)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_act_r_ave', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_act_s_ave', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_act_t_ave', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_active_max',
+        label: '⚡ توان اکتیو بیشینه (kW)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_act_r_max', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_act_s_max', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_act_t_max', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_active_min',
+        label: '⚡ توان اکتیو کمینه (kW)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_act_r_min', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_act_s_min', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_act_t_min', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// توان راکتیو ///////////////////
+    {
+        value: 'power_reactive_cur',
+        label: '🔋 توان راکتیو لحظه‌ای (kVAR)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_ract_r_cur', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_ract_s_cur', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_ract_t_cur', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_reactive_ave',
+        label: '🔋 توان راکتیو میانگین (kVAR)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_ract_r_ave', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_ract_s_ave', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_ract_t_ave', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_reactive_max',
+        label: '🔋 توان راکتیو بیشینه (kVAR)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_ract_r_max', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_ract_s_max', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_ract_t_max', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_reactive_min',
+        label: '🔋 توان راکتیو کمینه (kVAR)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_ract_r_min', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_ract_s_min', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_ract_t_min', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    ///////////////////////// توان ظاهری ///////////////////
+    {
+        value: 'power_apparent_cur',
+        label: '💡 توان ظاهری لحظه‌ای (kVA)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_apparent_r_cur', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_apparent_s_cur', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_apparent_t_cur', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_apparent_ave',
+        label: '💡 توان ظاهری میانگین (kVA)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_apparent_r_ave', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_apparent_s_ave', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_apparent_t_ave', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_apparent_max',
+        label: '💡 توان ظاهری بیشینه (kVA)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_apparent_r_max', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_apparent_s_max', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_apparent_t_max', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
+    {
+        value: 'power_apparent_min',
+        label: '💡 توان ظاهری کمینه (kVA)',
+        isGroup: true,
+        phases: [
+            { key: 'r', param: 'p_apparent_r_min', label: 'فاز R', color: PHASE_COLORS.r },
+            { key: 's', param: 'p_apparent_s_min', label: 'فاز S', color: PHASE_COLORS.s },
+            { key: 't', param: 'p_apparent_t_min', label: 'فاز T', color: PHASE_COLORS.t },
+        ]
+    },
 ];
 
-const DEVICE_PARAMETERS = [
-    "frq_ave", "frq_cur", "frq_max", "frq_min", "thd_vrn", "thd_vrs", "thd_vrt", "thd_vsn",
-    "thd_vst", "thd_vtn", "v_rn_ave", "v_rn_cur", "v_rn_max", "v_rn_min", "v_rs_ave", "v_rs_cur", "v_rs_max", "v_rs_min",
-    "v_rt_ave", "v_rt_cur", "v_rt_max", "v_rt_min", "v_sn_ave", "v_sn_cur", "v_sn_max", "v_sn_min", "v_tn_ave", "v_tn_cur",
-    "v_tn_max", "v_tn_min", "v_ts_ave", "v_ts_cur", "v_ts_max", "v_ts_min", "cos_r_ave", "cos_r_cur", "cos_r_max", "cos_r_min",
-    "cos_s_ave", "cos_s_cur", "cos_s_max", "cos_s_min", "cos_t_ave", "cos_t_cur", "cos_t_max", "cos_t_min",
-    "p_act_r_ave", "p_act_r_cur", "p_act_r_max", "p_act_r_min", "p_act_s_ave", "p_act_s_cur", "p_act_s_max",
-    "p_act_s_min", "p_act_t_ave", "p_act_t_cur", "p_act_t_max", "p_act_t_min", "harmonic_1_R", "harmonic_1_S",
-    "harmonic_1_T", "harmonic_2_R", "harmonic_2_S", "harmonic_2_T", "harmonic_3_R", "harmonic_3_S", "harmonic_3_T",
-    "harmonic_4_R", "harmonic_4_S", "harmonic_4_T", "harmonic_5_R", "harmonic_5_S", "harmonic_5_T", "harmonic_6_R",
-    "harmonic_6_S", "harmonic_6_T", "harmonic_7_R", "harmonic_7_S", "harmonic_7_T", "harmonic_8_R", "harmonic_8_S",
-    "harmonic_8_T", "harmonic_9_R", "harmonic_9_S", "harmonic_9_T", "p_ract_r_ave", "p_ract_r_cur", "p_ract_r_max",
-    "p_ract_r_min", "p_ract_s_ave", "p_ract_s_cur", "p_ract_s_max", "p_ract_s_min", "p_ract_t_ave", "p_ract_t_cur",
-    "p_ract_t_max", "p_ract_t_min", "cos_total_ave", "cos_total_cur", "cos_total_max", "cos_total_min", "harmonic_10_R",
-    "harmonic_10_S", "harmonic_10_T", "harmonic_11_R", "harmonic_11_S", "harmonic_11_T", "harmonic_12_R", "harmonic_12_S",
-    "harmonic_12_T", "harmonic_13_R", "harmonic_13_S", "harmonic_13_T", "harmonic_14_R", "harmonic_14_S", "harmonic_14_T",
-    "harmonic_15_R", "harmonic_15_S", "harmonic_15_T", "p_act_into_grid", "p_act_into_load", "p_apparent_r_ave",
-    "p_apparent_r_cur", "p_apparent_r_max", "p_apparent_r_min", "p_apparent_s_ave", "p_apparent_s_cur", "p_apparent_s_max",
-    "p_apparent_s_min", "p_apparent_t_ave", "p_apparent_t_cur", "p_apparent_t_max", "p_apparent_t_min", "p_ract_into_grid",
-    "p_ract_into_load", "p_apparent_into_grid", "p_apparent_into_load"
+// پارامترهای عمومی سیستم (تکی و بدون فاز)
+const DEVICE_PARAMETERS: { value: string; label: string }[] = [
+    // فرکانس شبکه
+    { value: "frq_cur", label: "📶 فرکانس لحظه‌ای شبکه (Hz)" },
+    { value: "frq_ave", label: "📶 فرکانس میانگین شبکه (Hz)" },
+    { value: "frq_max", label: "📶 فرکانس بیشینه شبکه (Hz)" },
+    { value: "frq_min", label: "📶 فرکانس کمینه شبکه (Hz)" },
+
+    // ضریب توان کل
+    { value: "cos_total_cur", label: "🔌 ضریب توان کل لحظه‌ای (PF)" },
+    { value: "cos_total_ave", label: "🔌 ضریب توان کل میانگین (PF)" },
+    { value: "cos_total_max", label: "🔌 ضریب توان کل بیشینه (PF)" },
+    { value: "cos_total_min", label: "🔌 ضریب توان کل کمینه (PF)" },
+
+    // تبادل توان اکتیو
+    { value: "p_act_into_grid", label: "⚡ توان اکتیو تزریقی به شبکه (kW)" },
+    { value: "p_act_into_load", label: "⚡ توان اکتیو مصرفی بار (kW)" },
+
+    // تبادل توان راکتیو
+    { value: "p_ract_into_grid", label: "🔋 توان راکتیو تزریقی به شبکه (kVAR)" },
+    { value: "p_ract_into_load", label: "🔋 توان راکتیو مصرفی بار (kVAR)" },
+
+    // تبادل توان ظاهری
+    { value: "p_apparent_into_grid", label: "💡 توان ظاهری به شبکه (kVA)" },
+    { value: "p_apparent_into_load", label: "💡 توان ظاهری مصرفی بار (kVA)" },
 ];
 
-// ترکیب گزینه‌های سه‌فاز و تک‌فازها
 const parameterOptions: ParameterGroupOption[] = [
     ...MULTI_PHASE_OPTIONS,
-    ...DEVICE_PARAMETERS.map(param => ({
-        value: param,
-        label: param,
+    ...DEVICE_PARAMETERS.map(item => ({
+        value: item.value,
+        label: item.label,
         isGroup: false
     }))
 ];
@@ -152,12 +430,57 @@ interface ChartDashboardProps {
     deviceName: string;
 }
 
+// کاستوم تول‌تیپ اختصاصی برای نمودار هارمونیک
+const HarmonicCustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || !payload.length) return null;
+
+    // دیتای سطر جاری از بارچارت
+    const rowData = payload[0]?.payload;
+
+    return (
+        <div style={{
+            backgroundColor: '#ffffff',
+            padding: '10px 14px',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            fontFamily: 'IRANSans, Tahoma, sans-serif',
+            direction: 'rtl',
+            textAlign: 'right',
+            minWidth: '180px'
+        }}>
+            <div style={{ fontWeight: 'bold', borderBottom: '1px solid #edf2f7', paddingBottom: '6px', marginBottom: '8px', color: '#1e293b' }}>
+                مرتبه هارمونیک: {label}
+            </div>
+
+            {payload.map((entry: any, index: number) => {
+                const phaseKey = entry.dataKey; // 'r' | 's' | 't'
+                const timeValue = rowData?.[`${phaseKey}Time`];
+
+                return (
+                    <div key={index} style={{ marginBottom: '6px', fontSize: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: entry.color }} />
+                            <span style={{ fontWeight: 600, color: entry.color }}>{entry.name}:</span>
+                            <span style={{ fontWeight: 'bold', direction: 'ltr' }}>{entry.value}%</span>
+                        </div>
+                        {timeValue && (
+                            <div style={{ fontSize: '10.5px', color: '#64748b', marginRight: '14px', marginTop: '2px' }}>
+                                🕒 {formatJalali(timeValue, true)}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
 const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
-    // مقدار پیش‌فرض: جریان ۳ فاز
     const [selectedOption, setSelectedOption] = useState<ParameterGroupOption>(parameterOptions[0]);
     const [selectedTime, setSelectedTime] = useState(timeframeOptions[0].value);
 
-    // 🎛️ استیت وضعیت نمایش/مخفی بودن هر فاز
+    // وضعیت نمایش فازها
     const [visiblePhases, setVisiblePhases] = useState<{ r: boolean; s: boolean; t: boolean }>({
         r: true,
         s: true,
@@ -170,7 +493,6 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
 
     const token = localStorage.getItem("token");
 
-    // تابع تغییر وضعیت تاگل فاز
     const togglePhase = (phaseKey: 'r' | 's' | 't') => {
         setVisiblePhases(prev => ({
             ...prev,
@@ -202,17 +524,52 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                     return result.data || [];
                 };
 
-                if (selectedOption.isGroup && selectedOption.phases) {
-                    // دریافت دیتای هر ۳ فاز به صورت همزمان (Parallel Fetching)
+                // ۱. وضعیت نمودار میله‌ای هارمونیک‌های فرد
+                if (selectedOption.isHarmonicBar) {
+                    // واکشی موازی همه هارمونیک‌های فرد برای R, S, T
+                    const fetchPhaseHarmonics = async (phaseUpper: string) => {
+                        const promises = ODD_HARMONICS.map(h => fetchSingleParam(`harmonic_${h}_${phaseUpper}`));
+                        const results = await Promise.all(promises);
+                        // آخرین مقدار ثبت‌شده را برای هر مرتبه هارمونیک برمی‌داریم
+                        return results.map((series: any[]) => {
+                            if (!series || series.length === 0) return { value: 0, time: '' };
+                            const lastEntry = series[series.length - 1];
+                            return {
+                                value: lastEntry.value != null ? Number(lastEntry.value) : 0,
+                                time: lastEntry.time
+                            };
+                        });
+                    };
+
+                    const [rData, sData, tData] = await Promise.all([
+                        fetchPhaseHarmonics('R'),
+                        fetchPhaseHarmonics('S'),
+                        fetchPhaseHarmonics('T')
+                    ]);
+
+                    // تبدیل دیتا به آرایه‌ای مناسب برای BarChart
+                    const harmonicBarData = ODD_HARMONICS.map((h, idx) => ({
+                        order: `H${h}`,
+                        harmonicNumber: h,
+                        r: rData[idx]?.value ?? 0,
+                        s: sData[idx]?.value ?? 0,
+                        t: tData[idx]?.value ?? 0,
+                        rTime: rData[idx]?.time,
+                        sTime: sData[idx]?.time,
+                        tTime: tData[idx]?.time
+                    }));
+
+                    setChartData(harmonicBarData);
+
+                } else if (selectedOption.isGroup && selectedOption.phases) {
+                    // ۲. وضعیت ۳ فاز معمولی (LineChart)
                     const [resR, resS, resT] = await Promise.all([
                         fetchSingleParam(selectedOption.phases[0].param),
                         fetchSingleParam(selectedOption.phases[1].param),
                         fetchSingleParam(selectedOption.phases[2].param)
                     ]);
 
-                    // ادغام مقادیر بر اساس فیلد time
                     const mergedMap = new Map<string, any>();
-
                     const mergeSeries = (dataList: any[], fieldKey: string) => {
                         dataList.forEach((item: any) => {
                             if (!mergedMap.has(item.time)) {
@@ -227,14 +584,14 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                     mergeSeries(resS, selectedOption.phases[1].key);
                     mergeSeries(resT, selectedOption.phases[2].key);
 
-                    // مرتب‌سازی زمانی
                     const mergedList = Array.from(mergedMap.values()).sort(
                         (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
                     );
 
                     setChartData(mergedList);
+
                 } else {
-                    // برای پارامترهای تکی
+                    // ۳. پارامترهای تکی (LineChart)
                     const singleData = await fetchSingleParam(selectedOption.value);
                     const formatted = singleData.map((item: any) => ({
                         time: item.time,
@@ -255,10 +612,36 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
         }
     }, [imei, deviceName, selectedOption, selectedTime, token]);
 
-    // محاسبه مقادیر حداقل و حداکثر (فقط برای فازهایی که تیک‌شان روشن است)
+    // محاسبه خلاصه آمار برای جدول
     const summaryRows = useMemo(() => {
         if (!chartData || chartData.length === 0) return [];
 
+        // حالت هارمونیک میله‌ای: بیشترین مرتبه اعوجاج در هر فاز
+        if (selectedOption.isHarmonicBar) {
+            const phases = [
+                { key: 'r', label: 'فاز R', color: PHASE_COLORS.r },
+                { key: 's', label: 'فاز S', color: PHASE_COLORS.s },
+                { key: 't', label: 'فاز T', color: PHASE_COLORS.t },
+            ].filter(p => visiblePhases[p.key as 'r' | 's' | 't']);
+
+            return phases.flatMap(phase => {
+                // هارمونیک پایه (H1) معمولاً مقدار ۱۰۰ یا دامنه اصلی است، مقایسه بین H3 به بالا معنادارتر است
+                const highestHarmonic = [...chartData].sort((a, b) => b[phase.key] - a[phase.key])[0];
+                return [
+                    {
+                        key: phase.key,
+                        label: phase.label,
+                        color: phase.color,
+                        type: `پیک (${highestHarmonic.order})`,
+                        typeColor: '#2563eb',
+                        value: `${highestHarmonic[phase.key]}%`,
+                        time: highestHarmonic[`${phase.key}Time`] || '-'
+                    }
+                ];
+            });
+        }
+
+        // حالت نمودارهای خطی معمولی
         const calculateMinMax = (key: string, label: string, color: string) => {
             const validItems = chartData.filter(d => typeof d[key] === 'number' && !isNaN(d[key]));
             if (validItems.length === 0) return [];
@@ -279,7 +662,7 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
 
         if (selectedOption.isGroup && selectedOption.phases) {
             return selectedOption.phases
-                .filter(phase => visiblePhases[phase.key]) // فیلتر فازهای فعال
+                .filter(phase => visiblePhases[phase.key])
                 .flatMap(phase => calculateMinMax(phase.key, phase.label, phase.color));
         }
         return calculateMinMax('value', selectedOption.label, '#8884d8');
@@ -287,39 +670,44 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
 
     return (
         <div dir={"rtl"} style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
-            <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 150px', maxWidth: '200px' }}>
-                    <Select
-                        options={timeframeOptions}
-                        value={timeframeOptions.find(opt => opt.value === selectedTime)}
-                        onChange={(option) => setSelectedTime(option?.value || '1h')}
-                        isRtl={true}
-                        placeholder="انتخاب بازه زمانی..."
-                    />
+            {/* کانتینر فیلترها و دکمه‌های تاگل */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+
+                {/* ۱. ردیف سلکت‌ها */}
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 150px', maxWidth: '200px' }}>
+                        <Select
+                            options={timeframeOptions}
+                            value={timeframeOptions.find(opt => opt.value === selectedTime)}
+                            onChange={(option) => setSelectedTime(option?.value || '1h')}
+                            isRtl={true}
+                            placeholder="انتخاب بازه زمانی..."
+                        />
+                    </div>
+
+                    <div style={{ flex: '1 1 280px', maxWidth: '440px' }}>
+                        <Select
+                            options={parameterOptions}
+                            value={selectedOption}
+                            onChange={(option) => {
+                                if (option) {
+                                    setSelectedOption(option);
+                                    setVisiblePhases({ r: true, s: true, t: true });
+                                }
+                            }}
+                            isRtl={true}
+                            isSearchable={true}
+                            placeholder="انتخاب پارامتر یا گروه سه‌فاز..."
+                        />
+                    </div>
                 </div>
 
-                <div style={{ flex: '1 1 280px', maxWidth: '420px' }}>
-                    <Select
-                        options={parameterOptions}
-                        value={selectedOption}
-                        onChange={(option) => {
-                            if (option) {
-                                setSelectedOption(option);
-                                setVisiblePhases({ r: true, s: true, t: true }); // ریست کردن تاگل‌ها
-                            }
-                        }}
-                        isRtl={true}
-                        isSearchable={true}
-                        placeholder="انتخاب پارامتر یا گروه سه‌فاز..."
-                    />
-                </div>
-
-                {/* 🎛️ دکمه‌های تاگل فازها (فقط وقتی که گروه سه‌فاز انتخاب شده باشد) */}
+                {/* ۲. ردیف دکمه‌های تاگل فازها (زیر سلکت‌ها، چسبیده به راست) */}
                 {selectedOption.isGroup && selectedOption.phases && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginRight: 'auto' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555', marginLeft: '4px' }}>
-                            نمایش فازها:
-                        </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555', marginLeft: '4px' }}>
+                        نمایش فازها:
+                    </span>
 
                         {selectedOption.phases.map(phase => {
                             const isVisible = visiblePhases[phase.key];
@@ -345,13 +733,13 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                                         opacity: isVisible ? 1 : 0.65
                                     }}
                                 >
+                                    {phase.label}
                                     <span style={{
                                         width: '8px',
                                         height: '8px',
                                         borderRadius: '50%',
                                         backgroundColor: isVisible ? '#fff' : phase.color
                                     }} />
-                                    {phase.key.toUpperCase()} ({phase.label.split(' ')[1] || phase.label})
                                 </button>
                             );
                         })}
@@ -359,13 +747,14 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                 )}
             </div>
 
+            {/* کارت نمودار و جدول */}
             <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#2c3e50', fontSize: '17px' }}>
-                    روند تغییرات: {selectedOption.label}
+                    {selectedOption.isHarmonicBar ? 'طیف هارمونیک‌های فرد' : 'روند تغییرات'}: {selectedOption.label}
                 </h3>
 
                 {isLoading ? (
-                    <div style={{ textAlign: 'center', padding: '50px', fontSize: '15px' }}>در حال همگام‌سازی و رسم فازها... ⏳</div>
+                    <div style={{ textAlign: 'center', padding: '50px', fontSize: '15px' }}>در حال همگام‌سازی و بارگذاری داده‌ها... ⏳</div>
                 ) : error ? (
                     <div style={{ color: 'red', textAlign: 'center', padding: '50px' }}>❌ {error}</div>
                 ) : chartData?.length === 0 ? (
@@ -375,79 +764,108 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                         {/* نمودار اصلی */}
                         <div style={{ flex: '3 1 600px', height: 460 }} dir="ltr">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart
-                                    data={chartData}
-                                    margin={{ top: 20, right: 30, left: 10, bottom: 60 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                    <XAxis
-                                        dataKey="time"
-                                        tickFormatter={(tick) => formatJalali(tick, false)}
-                                        angle={-45}
-                                        textAnchor="end"
-                                        height={80}
-                                        minTickGap={35}
-                                        tick={{ fontSize: 11, fill: '#666', fontFamily: 'IRANSans, Tahoma, sans-serif' }}
-                                    />
-                                    <YAxis tick={{ fontSize: 12 }} domain={['auto', 'auto']} />
-                                    <Tooltip
-                                        labelFormatter={(label) => formatJalali(label, true)}
-                                        contentStyle={{ direction: 'rtl', textAlign: 'right', borderRadius: '8px', fontFamily: 'IRANSans, Tahoma' }}
-                                        itemStyle={{ direction: 'rtl', textAlign: 'right' }}
-                                    />
-                                    <Legend
-                                        verticalAlign="top"
-                                        height={36}
-                                        wrapperStyle={{ paddingBottom: '10px', direction: 'rtl', cursor: 'pointer' }}
-                                        onClick={(e) => {
-                                            // تاگل با کلیک مستقیم روی راهنمای نمودار
-                                            const phase = selectedOption.phases?.find(p => p.label === e.value);
-                                            if (phase) togglePhase(phase.key);
-                                        }}
-                                    />
+                                {selectedOption.isHarmonicBar ? (
+                                    /* 📊 نمودار میله‌ای اختصاصی هارمونیک‌ها */
+                                    <BarChart
+                                        data={chartData}
+                                        margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                        <XAxis
+                                            dataKey="order"
+                                            tick={{ fontSize: 13, fontWeight: 'bold', fill: '#333' }}
+                                        />
+                                        <YAxis
+                                            tick={{ fontSize: 12 }}
+                                            label={{ value: 'مقدار / درصد (%)', angle: -90, position: 'insideLeft', offset: 10, fontSize: 12 }}
+                                        />
+                                        <Tooltip content={<HarmonicCustomTooltip />} />
+                                        {/*<Legend*/}
+                                        {/*    verticalAlign="top"*/}
+                                        {/*    height={36}*/}
+                                        {/*    wrapperStyle={{ paddingBottom: '10px', direction: 'rtl', cursor: 'pointer' }}*/}
+                                        {/*    onClick={(e) => {*/}
+                                        {/*        const phase = selectedOption.phases?.find(p => p.label === e.value);*/}
+                                        {/*        if (phase) togglePhase(phase.key);*/}
+                                        {/*    }}*/}
+                                        {/*/>*/}
+                                        <Bar dataKey="r" name="فاز R" fill={PHASE_COLORS.r} hide={!visiblePhases.r} radius={[4, 4, 0, 0]} maxBarSize={5} />
+                                        <Bar dataKey="s" name="فاز S" fill={PHASE_COLORS.s} hide={!visiblePhases.s} radius={[4, 4, 0, 0]} maxBarSize={5} />
+                                        <Bar dataKey="t" name="فاز T" fill={PHASE_COLORS.t} hide={!visiblePhases.t} radius={[4, 4, 0, 0]} maxBarSize={5} />
+                                    </BarChart>
+                                ) : (
+                                    /* 📈 نمودار خطی روند زمانی */
+                                    <LineChart
+                                        data={chartData}
+                                        margin={{ top: 20, right: 30, left: 10, bottom: 60 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                        <XAxis
+                                            dataKey="time"
+                                            tickFormatter={(tick) => formatJalali(tick, false)}
+                                            angle={-45}
+                                            textAnchor="end"
+                                            height={80}
+                                            minTickGap={35}
+                                            tick={{ fontSize: 11, fill: '#666', fontFamily: 'IRANSans, Tahoma, sans-serif' }}
+                                        />
+                                        <YAxis tick={{ fontSize: 12 }} domain={['auto', 'auto']} />
+                                        <Tooltip
+                                            labelFormatter={(label) => formatJalali(label, true)}
+                                            contentStyle={{ direction: 'rtl', textAlign: 'right', borderRadius: '8px', fontFamily: 'IRANSans, Tahoma' }}
+                                            itemStyle={{ direction: 'rtl', textAlign: 'right' }}
+                                        />
+                                        {/*<Legend*/}
+                                        {/*    verticalAlign="top"*/}
+                                        {/*    height={36}*/}
+                                        {/*    wrapperStyle={{ paddingBottom: '10px', direction: 'rtl', cursor: 'pointer' }}*/}
+                                        {/*    onClick={(e) => {*/}
+                                        {/*        const phase = selectedOption.phases?.find(p => p.label === e.value);*/}
+                                        {/*        if (phase) togglePhase(phase.key);*/}
+                                        {/*    }}*/}
+                                        {/*/>*/}
 
-                                    {/* خطوط فازها با پراپرتی hide نیتیو */}
-                                    {selectedOption.isGroup && selectedOption.phases ? (
-                                        selectedOption.phases.map((phase) => (
+                                        {selectedOption.isGroup && selectedOption.phases ? (
+                                            selectedOption.phases.map((phase) => (
+                                                <Line
+                                                    key={phase.key}
+                                                    type="monotone"
+                                                    dataKey={phase.key}
+                                                    name={phase.label}
+                                                    stroke={phase.color}
+                                                    strokeWidth={2.2}
+                                                    dot={false}
+                                                    activeDot={{ r: 5 }}
+                                                    connectNulls={true}
+                                                    hide={!visiblePhases[phase.key]}
+                                                />
+                                            ))
+                                        ) : (
                                             <Line
-                                                key={phase.key}
                                                 type="monotone"
-                                                dataKey={phase.key}
-                                                name={phase.label}
-                                                stroke={phase.color}
-                                                strokeWidth={2.2}
-                                                dot={false}
+                                                dataKey="value"
+                                                name={selectedOption.label}
+                                                stroke="#8884d8"
+                                                strokeWidth={2}
+                                                dot={{ r: 2 }}
                                                 activeDot={{ r: 5 }}
                                                 connectNulls={true}
-                                                hide={!visiblePhases[phase.key]}
                                             />
-                                        ))
-                                    ) : (
-                                        /* پارامتر تکی */
-                                        <Line
-                                            type="monotone"
-                                            dataKey="value"
-                                            name={selectedOption.label}
-                                            stroke="#8884d8"
-                                            strokeWidth={2}
-                                            dot={{ r: 2 }}
-                                            activeDot={{ r: 5 }}
-                                            connectNulls={true}
-                                        />
-                                    )}
+                                        )}
 
-                                    <Brush
-                                        dataKey="time"
-                                        height={30}
-                                        stroke="#8884d8"
-                                        fill="#f4f6f8"
-                                        tickFormatter={(tick) => formatJalali(tick, false)}
-                                    />
-                                </LineChart>
+                                        <Brush
+                                            dataKey="time"
+                                            height={30}
+                                            stroke="#8884d8"
+                                            fill="#f4f6f8"
+                                            tickFormatter={(tick) => formatJalali(tick, false)}
+                                        />
+                                    </LineChart>
+                                )}
                             </ResponsiveContainer>
                         </div>
 
-                        {/* جدول آمار مینیمم و ماکسیمم فازها */}
+                        {/* جدول آمار */}
                         <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                             <div style={{ border: '1px solid #eee', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '13px' }}>
@@ -456,7 +874,7 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                                         <th style={{ padding: '10px 6px', borderBottom: '2px solid #ddd' }}>فاز / پارامتر</th>
                                         <th style={{ padding: '10px 6px', borderBottom: '2px solid #ddd' }}>وضعیت</th>
                                         <th style={{ padding: '10px 6px', borderBottom: '2px solid #ddd' }}>مقدار</th>
-                                        <th style={{ padding: '10px 6px', borderBottom: '2px solid #ddd' }}>زمان ثبت</th>
+                                        <th style={{ padding: '10px 6px', borderBottom: '2px solid #ddd' }}>زمان / ثبت</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -472,7 +890,7 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                                             const rowsPerPhase = summaryRows.filter((r: any) => r.label === row.label).length;
 
                                             return (
-                                                <tr key={idx} style={{ backgroundColor: row.type === 'حداکثر' ? '#fafafa' : '#fff' }}>
+                                                <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fafafa' : '#fff' }}>
                                                     {isNewPhase && (
                                                         <td
                                                             rowSpan={rowsPerPhase}
@@ -495,7 +913,7 @@ const ChartDashboard = ({ imei, deviceName }: ChartDashboardProps) => {
                                                         {row.value}
                                                     </td>
                                                     <td style={{ padding: '6px', fontSize: '11px', color: '#666', whiteSpace: 'nowrap' }}>
-                                                        {formatJalali(row.time, false)}
+                                                        {row.time ? (row.time === '-' ? '-' : formatJalali(row.time, false)) : '-'}
                                                     </td>
                                                 </tr>
                                             );
