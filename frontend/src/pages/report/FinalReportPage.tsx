@@ -23,8 +23,6 @@ interface Report {
     admin_note?: string | null;
 }
 
-const BACKEND_BASE_URL = "http://localhost:8080";
-
 export default function FinalReportPage() {
     const [devices, setDevices] = useState<Device[]>([]);
     const [reports, setReports] = useState<Report[]>([]);
@@ -58,11 +56,13 @@ export default function FinalReportPage() {
     };
 
     const getDownloadUrl = (filePath: string) => {
+        if (!filePath) return "#";
+        // اگر از قبل کامل با http یا https بود
         if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
             return filePath;
         }
-        const cleanedPath = filePath.startsWith("/") ? filePath : `/${filePath}`;
-        return `${BACKEND_BASE_URL}${cleanedPath}`;
+        // اگر مسیر نسبی بود، مطمئن میشیم با اسلش شروع میشه
+        return filePath.startsWith("/") ? filePath : `/${filePath}`;
     };
 
     const fetchData = async () => {
