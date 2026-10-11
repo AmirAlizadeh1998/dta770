@@ -37,9 +37,6 @@ const STATUS_OPTIONS = [
     "لغو شده",
 ];
 
-// آدرس بیس سرور بک‌اند (برای سرو فایل‌های استاتیک)
-const BACKEND_BASE_URL = "http://localhost:8080";
-
 export default function AdminFinalReportPage() {
     const [reports, setReports] = useState<AdminReport[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -204,13 +201,14 @@ export default function AdminFinalReportPage() {
         }
     };
 
-    // تصحیح آدرس برای جلوگیری از لود صفحه وب اپ به جای فایل دانلودی
     const getDownloadUrl = (filePath: string) => {
+        if (!filePath) return "#";
+        // اگر از قبل کامل با http یا https بود
         if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
             return filePath;
         }
-        const cleanedPath = filePath.startsWith("/") ? filePath : `/${filePath}`;
-        return `${BACKEND_BASE_URL}${cleanedPath}`;
+        // اگر مسیر نسبی بود، مطمئن میشیم با اسلش شروع میشه
+        return filePath.startsWith("/") ? filePath : `/${filePath}`;
     };
 
     const getStatusBadge = (status: string) => {
@@ -284,7 +282,7 @@ export default function AdminFinalReportPage() {
             {/* جدول مدیریت با اسکرول افقی */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1000px] text-right border-collapse text-sm">
+                    <table className="w-full min-w-250 text-right border-collapse text-sm">
                         <thead>
                         <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 whitespace-nowrap">
                             <th className="p-4 font-semibold w-16">شناسه</th>
