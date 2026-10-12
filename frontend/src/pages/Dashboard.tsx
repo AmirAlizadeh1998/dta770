@@ -23,7 +23,7 @@ import { UserProfilePage } from "./profile/UserProfilePage.tsx";
 import AiFileAnalyzePage from "./report/AiFileAnalyzePage.tsx";
 import type { DeviceMonitorSelection } from "../models/device.ts";
 import DeviceListPage from "./devices/DeviceListPage.tsx";
-import ParameterLimitsPage from "./ParameterLimitsPage.tsx";
+import ParameterLimitsPage from "./settings/ParameterLimitsPage.tsx";
 import FinalReportPage from "./report/FinalReportPage.tsx";
 import AdminFinalReportPage from "./report/AdminFinalReportPage.tsx";
 

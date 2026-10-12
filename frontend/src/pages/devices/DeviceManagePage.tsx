@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from "react"
+import React, {useEffect, useMemo, useRef, useState} from "react"
 import JalaliDatePicker from "../../components/JalaliDatePicker.tsx"
 import {FormatToJalali} from "../../utils/Formatters.ts"
 import {UserRole} from "../../models/consts.ts"
@@ -123,11 +123,15 @@ type FieldProps = {
     value: string
     required?: boolean
     placeholder?: string
+    maxLength?: number,
     error?: string
     onChange: (key: keyof DeviceForm, value: string) => void
 }
 
-function Field({label, fieldKey, value, required, placeholder, onChange, error}: FieldProps) {
+function Field({label, fieldKey, value, required, placeholder, maxLength, onChange, error}: FieldProps) {
+    const currentLen = value?.length || 0
+    const isLimitReached = maxLength !== undefined && currentLen >= maxLength
+
     return (
         <div className="flex items-center gap-3 mb-3">
             <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
@@ -138,18 +142,39 @@ function Field({label, fieldKey, value, required, placeholder, onChange, error}:
                     type="text"
                     value={value}
                     onChange={(e) => onChange(fieldKey, e.target.value)}
+                    maxLength={maxLength}
                     placeholder={placeholder}
                     className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                         error ? "border-red-400" : "border-gray-300"
                     }`}
                 />
-                {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+
+                {/* ردیف زیر اینپوت: خطا در سمت راست و بج شمارنده در سمت چپ */}
+                <div className="flex items-center justify-between mt-1 min-h-[18px]">
+                    <div className="flex-1">
+                        {error && <p className="text-red-500 text-xs">{error}</p>}
+                    </div>
+
+                    {maxLength && (
+                        <span
+                            dir="ltr"
+                            className={`inline-flex items-center text-[11px] font-mono px-2 py-0.5 rounded-full transition-colors select-none ${
+                                isLimitReached
+                                    ? "bg-red-100 text-red-700 font-bold border border-red-200"
+                                    : "bg-gray-100 text-gray-500 border border-gray-200"
+                            }`}
+                        >
+                            {currentLen} / {maxLength}
+                        </span>
+                    )}
+                </div>
             </div>
         </div>
     )
 }
 
 export default function DeviceManagePage() {
+    const formTopRef = useRef<HTMLDivElement | null>(null);
     const [form, setForm] = useState<DeviceForm>(initialForm)
     const [errors, setErrors] = useState<Partial<Record<keyof DeviceForm, string>>>({})
     const [devices, setDevices] = useState<Device[]>([])
@@ -219,7 +244,11 @@ export default function DeviceManagePage() {
         const trimmedDeviceCode = form.deviceCode.trim()
         const trimmedPhone = form.phone.trim()
 
-        if (!trimmedName) e.deviceName = "نام دستگاه اجباری است"
+        if (!trimmedName) {
+            e.deviceName = "نام دستگاه اجباری است"
+        } else if (trimmedName.length > 25) { // 👈 سقف ۲۵ کاراکتر به خاطر سامانه پیامک
+            e.deviceName = "نام دستگاه نمی‌تواند بیشتر از ۲۵ کاراکتر باشد"
+        }
         if (!trimmedDeviceCode) {
             e.deviceCode = "کد دستگاه اجباری است"
         } else {
@@ -544,7 +573,25 @@ export default function DeviceManagePage() {
             alertPhones: initialPhones,
         })
 
-        window.scrollTo({top: 0, behavior: "smooth"})
+        setTimeout(() => {
+            // روش اول: اسکرول به خود رفرنس
+            if (formTopRef.current) {
+                formTopRef.current.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                    inline: "nearest"
+                });
+            }
+
+            // روش دوم (پشتیبان دسکتاپ): اگر کل پنلت داخل یک div با overflow هست
+            const mainScrollable = document.querySelector("main") || document.querySelector(".overflow-y-auto");
+            if (mainScrollable) {
+                mainScrollable.scrollTo({ top: 0, behavior: "smooth" });
+            }
+
+            // روش سوم (پشتیبان موبایل)
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }, 50);
     }
 
     const handleCancelEdit = () => {
@@ -611,20 +658,21 @@ export default function DeviceManagePage() {
     }, [devices])
 
     return (
-        <div dir="rtl" className="space-y-12">
+        <div ref={formTopRef} id="form-container">
+            <div dir="rtl" className="space-y-12">
             <form onSubmit={handleSubmit} className="space-y-8">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* مشخصات مشتری و دستگاه */}
                     <section className="bg-white rounded-lg border border-gray-200 p-5">
                         <h3 className="text-base font-bold text-gray-800 mb-4">مشخصات دستگاه و انتصاب مالک</h3>
                         <Field label="نام دستگاه" fieldKey="deviceName" error={errors.deviceName}
-                               value={form.deviceName} onChange={handleChange} required/>
+                               value={form.deviceName} maxLength={25} onChange={handleChange} required/>
                         <Field label="IMEI" fieldKey="imei" error={errors.imei} value={form.imei}
                                onChange={handleChange} required/>
                         <Field label="کد دستگاه" fieldKey="deviceCode" error={errors.deviceCode} value={form.deviceCode}
                                onChange={handleChange} required/>
 
-                        {/* فیلد انتساب مالک به صورت Select + دکمه باز کردن UserFormModal */}
+                        {/* فیلد انتساب مالک */}
                         <div className="flex items-center gap-3 mb-3">
                             <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
                                 مالک دستگاه:
@@ -681,7 +729,6 @@ export default function DeviceManagePage() {
                             </div>
                         </div>
                         {/* فیلد داینامیک شماره‌های دریافت پیامک هشدار */}
-                        {/* فیلد داینامیک شماره‌های دریافت پیامک هشدار به همراه دکمه و بج‌ها */}
                         <div className="flex flex-col gap-2 mb-4">
                             <div className="flex items-center gap-3">
                                 <label className="w-32 shrink-0 text-sm text-gray-600 text-left">
@@ -1009,6 +1056,7 @@ export default function DeviceManagePage() {
                 onSubmit={handleCreateUserFromModal}
                 fixedRoleId={userRoleId}
             />
+        </div>
         </div>
     )
 }
