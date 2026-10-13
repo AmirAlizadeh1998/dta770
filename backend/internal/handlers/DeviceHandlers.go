@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lib/pq"
 )
@@ -78,7 +79,7 @@ func DevicesHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "آیدی دستگاه مشخص نشده است", http.StatusBadRequest)
 			return
 		}
-		handleDeleteDevice(w, r, id)
+		handleDeleteDevice(w, id)
 
 	default:
 		http.Error(w, "متد مجاز نیست", http.StatusMethodNotAllowed)
@@ -101,7 +102,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	startDate := q.Get("startDate")
 	endDate := q.Get("endDate")
 
-	// مرتب سازی
+	// مرتب‌سازی
 	sortBy := q.Get("sortBy")
 	sortOrder := q.Get("sortOrder")
 
@@ -116,7 +117,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var conditions []string
-	var args []interface{}
+	var args []any
 	paramCount := 1
 
 	// ✨ ۲. مدیریت دسترسی و فیلتر دستگاه:
@@ -133,7 +134,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				// دستگاه پیدا نشد یا مال این کاربر نیست -> خروجی خالی
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(PaginatedLogsResponse{
+				_ = json.NewEncoder(w).Encode(PaginatedLogsResponse{
 					Logs:        []models.Logs{},
 					CurrentPage: page,
 					TotalPages:  0,
@@ -199,9 +200,9 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 
 	totalPages := 0
 	if totalLogs > 0 {
-		totalPages = int((totalLogs + limit - 1) / limit)
+		totalPages = (totalLogs + limit - 1) / limit
 	}
-	offset := int((page - 1) * limit)
+	offset := (page - 1) * limit
 
 	// ۵. مدیریت سورت
 	orderDirection := "DESC"
@@ -231,7 +232,9 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var logs []models.Logs
 	for rows.Next() {
@@ -269,7 +272,7 @@ func GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
+func GetActiveDevicesHandler(w http.ResponseWriter, _ *http.Request) {
 	rows, err := database.DB.Query(`
 		SELECT 
 			d.id, 
@@ -298,7 +301,9 @@ func GetActiveDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "خطا در دریافت دستگاه‌ها", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	type ActiveDevice struct {
 		ID           int       `json:"id"`
@@ -433,7 +438,9 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "خطا در دریافت دستگاه‌ها", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var devices []models.Device
 
@@ -524,8 +531,16 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
 		log.Printf("❌ JSON Decode Error: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"message": "فرمت داده‌ها نامعتبر است",
+		})
+		return
+	}
+
+	if utf8.RuneCountInString(d.DeviceName) > 25 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"message": "نام دستگاه نمی‌تواند بیشتر از ۲۵ کاراکتر باشد",
 		})
 		return
 	}
@@ -539,7 +554,7 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error checking active device IMEI: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "خطا در بررسی وضعیت دستگاه‌های موجود",
 		})
 		return
@@ -547,7 +562,7 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 
 	if activeCount > 0 {
 		w.WriteHeader(http.StatusConflict) // 409 Conflict
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "یک دستگاه فعال با این IMEI در حال حاضر وجود دارد! 🚫",
 		})
 		return
@@ -609,7 +624,7 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		// بررسی خطای Foreign Key (کد 23503 در Postgres - کاربر پیدا نشد)
 		if strings.Contains(err.Error(), "23503") {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"message": "کاربر انتخاب‌شده در سیستم معتبر نیست! 👤🚫",
 			})
 			return
@@ -620,20 +635,20 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict) // 409 Conflict
 
 			if strings.Contains(err.Error(), "unique_device_code") {
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"message": "این کد دستگاه قبلاً ثبت شده است! 🚫",
 				})
 				return
 			}
 
 			if strings.Contains(err.Error(), "unique_device_name_imei") {
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"message": "دستگاهی با این ترکیب نام و IMEI قبلاً ثبت شده است! 🚫",
 				})
 				return
 			}
 
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"message": "مقدار وارد شده تکراری است! 🚫",
 			})
 			return
@@ -641,14 +656,14 @@ func handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("Error inserting device: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "خطا در ذخیره دستگاه",
 		})
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":  "success",
 		"message": "دستگاه با موفقیت ذخیره شد",
 		"id":      newID,
@@ -662,8 +677,16 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "فرمت داده‌ها نامعتبر است! 🚫",
+		})
+		return
+	}
+
+	if utf8.RuneCountInString(d.DeviceName) > 25 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"message": "نام دستگاه نمی‌تواند بیشتر از ۲۵ کاراکتر باشد",
 		})
 		return
 	}
@@ -676,7 +699,7 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		if err != nil {
 			log.Printf("Error checking active device IMEI in update: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"message": "خطا در بررسی وضعیت دستگاه‌های موجود",
 			})
 			return
@@ -684,7 +707,7 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 
 		if activeCount > 0 {
 			w.WriteHeader(http.StatusConflict) // 409 Conflict
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"message": "یک دستگاه فعال دیگر با این IMEI در حال حاضر وجود دارد! 🚫",
 			})
 			return
@@ -762,7 +785,7 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 		// بررسی خطای Foreign Key (کد 23503 در Postgres - کاربر پیدا نشد)
 		if strings.Contains(err.Error(), "23503") {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"message": "کاربر انتخاب‌شده در سیستم معتبر نیست! 👤🚫",
 			})
 			return
@@ -773,20 +796,20 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 			w.WriteHeader(http.StatusConflict) // کد 409
 
 			if strings.Contains(err.Error(), "unique_device_code") {
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"message": "این کد دستگاه قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
 				})
 				return
 			}
 
 			if strings.Contains(err.Error(), "unique_device_name_imei") {
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"message": "ترکیب این نام و IMEI قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
 				})
 				return
 			}
 
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"message": "این نام یا IMEI قبلاً برای یک دستگاه دیگر ثبت شده است! 🚫",
 			})
 			return
@@ -794,7 +817,7 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 
 		log.Printf("Error updating device: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "خطا در بروزرسانی دستگاه",
 		})
 		return
@@ -804,7 +827,7 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 	if err != nil {
 		log.Printf("Error checking affected rows: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "خطای داخلی سرور",
 		})
 		return
@@ -812,20 +835,20 @@ func handleUpdateDevice(w http.ResponseWriter, r *http.Request, id int) {
 
 	if affectedRows == 0 {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "دستگاه مورد نظر پیدا نشد! 🔍",
 		})
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":  "success",
 		"message": "دستگاه با موفقیت بروزرسانی شد",
 	})
 }
 
-func handleDeleteDevice(w http.ResponseWriter, r *http.Request, id int) {
+func handleDeleteDevice(w http.ResponseWriter, id int) {
 	result, err := database.DB.Exec(`
 		DELETE FROM devices
 		WHERE id = $1
@@ -849,7 +872,7 @@ func handleDeleteDevice(w http.ResponseWriter, r *http.Request, id int) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":  "success",
 		"message": "دستگاه با موفقیت حذف شد",
 	})

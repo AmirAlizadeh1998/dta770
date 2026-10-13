@@ -145,7 +145,7 @@ const MULTI_PHASE_OPTIONS: ParameterGroupOption[] = [
         phases: [
             { key: 'r', param: 'v_rs_cur', label: 'خط R-S', color: PHASE_COLORS.r },
             { key: 's', param: 'v_rt_cur', label: 'خط R-T', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_st_cur', label: 'خط S-T', color: PHASE_COLORS.t },
+            { key: 't', param: 'v_ts_cur', label: 'خط S-T', color: PHASE_COLORS.t },
         ]
     },
     {
@@ -155,7 +155,7 @@ const MULTI_PHASE_OPTIONS: ParameterGroupOption[] = [
         phases: [
             { key: 'r', param: 'v_rs_ave', label: 'خط R-S', color: PHASE_COLORS.r },
             { key: 's', param: 'v_rt_ave', label: 'خط R-T', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_st_ave', label: 'خط S-T', color: PHASE_COLORS.t },
+            { key: 't', param: 'v_ts_ave', label: 'خط S-T', color: PHASE_COLORS.t },
         ]
     },
     {
@@ -165,7 +165,7 @@ const MULTI_PHASE_OPTIONS: ParameterGroupOption[] = [
         phases: [
             { key: 'r', param: 'v_rs_max', label: 'خط R-S', color: PHASE_COLORS.r },
             { key: 's', param: 'v_rt_max', label: 'خط R-T', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_st_max', label: 'خط S-T', color: PHASE_COLORS.t },
+            { key: 't', param: 'v_ts_max', label: 'خط S-T', color: PHASE_COLORS.t },
         ]
     },
     {
@@ -175,7 +175,7 @@ const MULTI_PHASE_OPTIONS: ParameterGroupOption[] = [
         phases: [
             { key: 'r', param: 'v_rs_min', label: 'خط R-S', color: PHASE_COLORS.r },
             { key: 's', param: 'v_rt_min', label: 'خط R-T', color: PHASE_COLORS.s },
-            { key: 't', param: 'v_st_min', label: 'خط S-T', color: PHASE_COLORS.t },
+            { key: 't', param: 'v_ts_min', label: 'خط S-T', color: PHASE_COLORS.t },
         ]
     },
     /////////////////////// اعوجاج کل جریان ///////////////////
