@@ -1,7 +1,7 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Select from 'react-select';
-import {apiFetch} from "../../api/ApiClient.ts";
-import type {Device} from "../../models/device.ts";
+import { apiFetch } from "../../api/ApiClient.ts";
+import type { Device } from "../../models/device.ts";
 import JalaliDatePicker from "../../components/JalaliDatePicker.tsx";
 
 const DEVICE_PARAMETERS = [
@@ -32,21 +32,26 @@ const DEVICE_PARAMETERS = [
     "p_apparent_r_ave", "p_apparent_r_cur", "p_apparent_r_max", "p_apparent_r_min",
     "p_apparent_s_ave", "p_apparent_s_cur", "p_apparent_s_max", "p_apparent_s_min",
     "p_apparent_t_ave", "p_apparent_t_cur", "p_apparent_t_max", "p_apparent_t_min",
-    "p_ract_into_grid", "p_ract_into_load", "p_apparent_into_grid", "p_apparent_into_load"
+    "p_ract_into_grid", "p_ract_into_load", "p_apparent_into_grid", "p_apparent_into_load", "acin"
 ];
 
-// 👈 آماده‌سازی آپشن‌ها برای react-select
-const parameterOptions = DEVICE_PARAMETERS.map(param => ({value: param, label: param}));
+const parameterOptions = DEVICE_PARAMETERS.map(param => ({ value: param, label: param }));
 
 const operatorOptions = [
-    {value: ">", label: "بزرگتر از"},
-    {value: "<", label: "کوچکتر از"},
-    {value: "=", label: "مساوی با"},
-    {value: ">=", label: "بزرگتر یا مساوی"},
-    {value: "<=", label: "کوچکتر یا مساوی"},
-    {value: "!=", label: "مخالف با"},
-    {value: "between", label: "بین دو مقدار"},
-    {value: "not_between", label: "خارج بین دو مقدار"},
+    { value: ">", label: "بزرگتر از" },
+    { value: "<", label: "کوچکتر از" },
+    { value: "=", label: "مساوی با" },
+    { value: ">=", label: "بزرگتر یا مساوی" },
+    { value: "<=", label: "کوچکتر یا مساوی" },
+    { value: "!=", label: "مخالف با" },
+    { value: "between", label: "بین دو مقدار" },
+    { value: "not_between", label: "خارج بین دو مقدار" },
+];
+
+// آپشن‌های اختصاصی وضعیت برق ورودی
+const acinStatusOptions = [
+    { value: 1, label: "وصل (1)" },
+    { value: 0, label: "قطع (0)" },
 ];
 
 interface FilterResult {
@@ -67,7 +72,11 @@ const DataAnalyzePage: React.FC = () => {
     const [operator, setOperator] = useState<string>('');
     const [firstFilterValue, setFirstFilterValue] = useState<number | ''>('');
     const [secondFilterValue, setSecondFilterValue] = useState<number | ''>('');
-    const isRangeOperator = operator === 'between' || operator === 'not_between';
+
+    // وضعیت acin
+    const isAcin = selectedParameter === 'acin';
+    const isRangeOperator = !isAcin && (operator === 'between' || operator === 'not_between');
+
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
 
@@ -79,12 +88,23 @@ const DataAnalyzePage: React.FC = () => {
     const [limit, setLimit] = useState<number>(10);
 
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({
-        key: 'time', // پیش‌فرض روی زمان
-        direction: 'desc', // پیش‌فرض نزولی (جدیدترین‌ها اول)
+        key: 'time',
+        direction: 'desc',
     });
 
-    useEffect(() => {
+    // مدیریت تغییر پارامتر
+    const handleParameterChange = (param: string) => {
+        setSelectedParameter(param);
+        setFirstFilterValue('');
+        setSecondFilterValue('');
+        if (param === 'acin') {
+            setOperator('='); // برای acin عملگر همیشه مساویه
+        } else {
+            setOperator('');
+        }
+    };
 
+    useEffect(() => {
         if (
             !selectedDevice ||
             !selectedParameter ||
@@ -99,13 +119,14 @@ const DataAnalyzePage: React.FC = () => {
 
         setCurrentPage(1);
         handleApplyFilter(1);
-
     }, [sortConfig, isRangeOperator, secondFilterValue, firstFilterValue, selectedDevice, selectedParameter, operator, startDate, endDate]);
 
     useEffect(() => {
-        setFirstFilterValue('');
-        setSecondFilterValue('');
-    }, [operator]);
+        if (!isAcin) {
+            setFirstFilterValue('');
+            setSecondFilterValue('');
+        }
+    }, [operator, isAcin]);
 
     const handleSort = (key: string) => {
         setSortConfig(prev => ({
@@ -118,7 +139,6 @@ const DataAnalyzePage: React.FC = () => {
         let sortableItems = [...tableData];
         if (sortConfig.key !== null) {
             sortableItems.sort((a: any, b: any) => {
-                // برای اینکه اعداد رو درست سورت کنه (مثلا رشته "12" نیاد قبل "2")
                 const valA = a[sortConfig.key!];
                 const valB = b[sortConfig.key!];
 
@@ -130,7 +150,6 @@ const DataAnalyzePage: React.FC = () => {
         return sortableItems;
     }, [tableData, sortConfig]);
 
-    // یه پارامتر page بهش می‌دیم که دیفالت ۱ هست
     const handleApplyFilter = async (page: number = 1, pageLimit: number = limit) => {
         if (
             !selectedDevice ||
@@ -173,7 +192,7 @@ const DataAnalyzePage: React.FC = () => {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem("token")}`
+                    Authorization: `Bearer ${token}`
                 }
             });
 
@@ -196,7 +215,6 @@ const DataAnalyzePage: React.FC = () => {
                 });
 
                 setTableData(formattedData);
-                // 👈 ذخیره اطلاعات صفحه‌بندی که بک‌اند میده
                 setTotalLogs(data.TotalLogs || 0);
                 setTotalPages(data.TotalPages || 1);
                 setCurrentPage(data.Page || page);
@@ -209,8 +227,6 @@ const DataAnalyzePage: React.FC = () => {
         } catch (error) {
             console.error("خطا در اعمال فیلتر:", error);
             setTableData([]);
-        } finally {
-
         }
     };
 
@@ -224,7 +240,7 @@ const DataAnalyzePage: React.FC = () => {
         const fetchDevices = async () => {
             try {
                 const response = await apiFetch("/api/devices", {
-                    headers: {"Authorization": `Bearer ${token}`}
+                    headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await response.json();
                 setDevices(data);
@@ -235,10 +251,8 @@ const DataAnalyzePage: React.FC = () => {
         fetchDevices();
     }, [token]);
 
-    // 👈 تبدیل دیتاهای دستگاه‌ها به فرمت react-select
     const deviceOptions = devices.map(device => ({
-        // فرض می‌کنیم فیلدی به اسم device_code در مدل Device وجود داره
-        value: device.device_code, // <--- تغییر اصلی اینجاست
+        value: device.device_code,
         label: `${device.device_name ? device.device_name : ''} (${device.imei})`
     }));
 
@@ -247,8 +261,9 @@ const DataAnalyzePage: React.FC = () => {
             <div className="bg-white p-6 rounded-lg shadow-sm mb-6 border border-gray-100">
                 <h2 className="text-xl font-semibold mb-6 border-r-4 border-teal-500 pr-2">بررسی داده ها</h2>
 
+                {/* ردیف انتخاب‌ها */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    {/* 👇 Select دستگاه‌ها */}
+                    {/* ۱. انتخاب دستگاه */}
                     <div className="w-full">
                         <Select
                             options={deviceOptions}
@@ -262,14 +277,14 @@ const DataAnalyzePage: React.FC = () => {
                         />
                     </div>
 
-                    {/* 👇 Select پارامترها */}
+                    {/* ۲. انتخاب پارامتر */}
                     <div className="w-full">
                         <Select
                             options={parameterOptions}
                             isRtl={true}
                             placeholder="پارامتر را انتخاب کنید..."
                             value={parameterOptions.find(opt => opt.value === selectedParameter) || null}
-                            onChange={(option) => setSelectedParameter(option?.value || '')}
+                            onChange={(option) => handleParameterChange(option?.value || '')}
                             isClearable
                             className="react-select-container"
                             classNamePrefix="react-select"
@@ -277,49 +292,68 @@ const DataAnalyzePage: React.FC = () => {
                         />
                     </div>
 
-                    {/* 👇 Select عملگرها */}
-                    <div className="w-full">
-                        <Select
-                            options={operatorOptions}
-                            isRtl={true}
-                            placeholder="عملگر را انتخاب کنید..."
-                            value={operatorOptions.find(opt => opt.value === operator) || null}
-                            onChange={(option) => setOperator(option?.value || '')}
-                            isClearable
-                            className="react-select-container"
-                            classNamePrefix="react-select"
-                            isDisabled={!selectedParameter}
-                        />
-                    </div>
-
-                    {isRangeOperator ? (
-                        <div className="grid grid-cols-2 gap-2">
-                            <input
-                                type="number"
-                                className="border border-gray-300 p-2 rounded w-full focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 h-9.5"
-                                value={firstFilterValue}
-                                onChange={(e) => setFirstFilterValue(e.target.value === '' ? '' : Number(e.target.value))}
-                                placeholder="از مقدار..."
-                                disabled={!operator}
-                            />
-                            <input
-                                type="number"
-                                className="border border-gray-300 p-2 rounded w-full focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 h-9.5"
-                                value={secondFilterValue}
-                                onChange={(e) => setSecondFilterValue(e.target.value === '' ? '' : Number(e.target.value))}
-                                placeholder="تا مقدار..."
-                                disabled={!operator}
+                    {/* ۳ و ۴. اگر acin بود فقط انتخاب وضعیت برق بیاد (۲ ستون می‌گیره تا گرید به هم نریزه) */}
+                    {isAcin ? (
+                        <div className="w-full md:col-span-2">
+                            <Select
+                                options={acinStatusOptions}
+                                isRtl={true}
+                                placeholder="وضعیت برق ورودی (قطع یا وصل)..."
+                                value={acinStatusOptions.find(opt => opt.value === firstFilterValue) || null}
+                                onChange={(option) => setFirstFilterValue(option !== null && option !== undefined ? option.value : '')}
+                                isClearable
+                                className="react-select-container"
+                                classNamePrefix="react-select"
                             />
                         </div>
                     ) : (
-                        <input
-                            type="number"
-                            className="border border-gray-300 p-2 rounded w-full focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 h-9.5"
-                            value={firstFilterValue}
-                            onChange={(e) => setFirstFilterValue(e.target.value === '' ? '' : Number(e.target.value))}
-                            placeholder="مقدار..."
-                            disabled={!operator}
-                        />
+                        <>
+                            {/* Select عملگرها برای بقیه پارامترها */}
+                            <div className="w-full">
+                                <Select
+                                    options={operatorOptions}
+                                    isRtl={true}
+                                    placeholder="عملگر را انتخاب کنید..."
+                                    value={operatorOptions.find(opt => opt.value === operator) || null}
+                                    onChange={(option) => setOperator(option?.value || '')}
+                                    isClearable
+                                    className="react-select-container"
+                                    classNamePrefix="react-select"
+                                    isDisabled={!selectedParameter}
+                                />
+                            </div>
+
+                            {/* فیلد(های) ورود مقدار عددی */}
+                            {isRangeOperator ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        className="border border-gray-300 p-2 rounded w-full focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 h-9.5"
+                                        value={firstFilterValue}
+                                        onChange={(e) => setFirstFilterValue(e.target.value === '' ? '' : Number(e.target.value))}
+                                        placeholder="از مقدار..."
+                                        disabled={!operator}
+                                    />
+                                    <input
+                                        type="number"
+                                        className="border border-gray-300 p-2 rounded w-full focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 h-9.5"
+                                        value={secondFilterValue}
+                                        onChange={(e) => setSecondFilterValue(e.target.value === '' ? '' : Number(e.target.value))}
+                                        placeholder="تا مقدار..."
+                                        disabled={!operator}
+                                    />
+                                </div>
+                            ) : (
+                                <input
+                                    type="number"
+                                    className="border border-gray-300 p-2 rounded w-full focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 h-9.5"
+                                    value={firstFilterValue}
+                                    onChange={(e) => setFirstFilterValue(e.target.value === '' ? '' : Number(e.target.value))}
+                                    placeholder="مقدار..."
+                                    disabled={!operator}
+                                />
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -338,8 +372,7 @@ const DataAnalyzePage: React.FC = () => {
 
                 <button
                     onClick={() => handleApplyFilter(1)}
-                    className="bg-blue-300 hover:bg-blue-400 text-white font-bold py-2 px-6 rounded transition-colors"
-                    // disabled={!selectedDevice || !selectedParameter || !operator || secondValue === '' || !startDate || !endDate}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded transition-colors shadow-sm"
                 >
                     اعمال فیلتر
                 </button>
@@ -361,11 +394,9 @@ const DataAnalyzePage: React.FC = () => {
                     <table className="min-w-full border-collapse bg-white">
                         <thead className="bg-gray-50">
                         <tr className="border-b border-gray-200 text-gray-600 text-sm">
-                            {/* روی هر th یه onClick گذاشتیم و یه آیکون فلش */}
                             <th onClick={() => handleSort('deviceId')}
                                 className="p-4 text-right font-semibold cursor-pointer select-none hover:bg-gray-100 transition-colors">
-                                شناسه
-                                دستگاه {sortConfig.key === 'deviceId' ? (sortConfig.direction === 'asc' ? '🔼' : '🔽') : '↕️'}
+                                شناسه دستگاه {sortConfig.key === 'deviceId' ? (sortConfig.direction === 'asc' ? '🔼' : '🔽') : '↕️'}
                             </th>
                             <th onClick={() => handleSort('time')}
                                 className="p-4 text-right font-semibold cursor-pointer select-none hover:bg-gray-100 transition-colors">
@@ -388,14 +419,31 @@ const DataAnalyzePage: React.FC = () => {
                                     <td className="p-4 text-gray-800">{row.deviceId}</td>
                                     <td className="p-4 text-gray-600" dir="ltr">{row.time}</td>
                                     <td className="p-4 text-gray-600 font-mono text-sm">{row.parameter}</td>
-                                    <td className="p-4 font-semibold text-gray-800 text-right" dir="ltr">
-                                        <span className="inline-block text-left">{row.value}</span>
+                                    <td className="p-4 font-semibold text-gray-800 text-right">
+                                        {/* نمایش خوشگل وضعیت برای acin */}
+                                        {row.parameter === 'acin' ? (
+                                            Number(row.value) === 1 ? (
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                                                    وصل (1)
+                                                </span>
+                                            ) : Number(row.value) === 0 ? (
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800 border border-rose-300">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                                                    قطع (0)
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400">{row.value}</span>
+                                            )
+                                        ) : (
+                                            <span className="inline-block text-left font-mono" dir="ltr">{row.value}</span>
+                                        )}
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={5} className="p-12 text-center text-gray-400">
+                                <td colSpan={4} className="p-12 text-center text-gray-400">
                                     اطلاعاتی یافت نشد!
                                 </td>
                             </tr>
@@ -404,12 +452,12 @@ const DataAnalyzePage: React.FC = () => {
                     </table>
                 </div>
 
-                {/* 👇 بخش صفحه‌بندی (Pagination) */}
+                {/* بخش صفحه‌بندی (Pagination) */}
                 {tableData.length > 0 && (
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mt-6 gap-4">
-        <span className="text-sm text-gray-600">
-            نمایش صفحه {currentPage} از {totalPages}
-        </span>
+                        <span className="text-sm text-gray-600">
+                            نمایش صفحه {currentPage} از {totalPages}
+                        </span>
 
                         <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-500">تعداد سطر:</span>

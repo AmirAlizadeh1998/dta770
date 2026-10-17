@@ -58,7 +58,7 @@ const menuItems: MenuItem[] = [
             { label: "لاگ ها", view: "logs", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.SuperUser] },
             { label: "مانیتور دستگاه", view: "monitor", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser] },
             { label: "بررسی داده ها", view: "analyze", roles: [UserRole.ADMIN, UserRole.INSTALLER, UserRole.REPORT, UserRole.USER, UserRole.SuperUser] },
-            { label: "درخواست گزارش نهایی", view: "final-report", roles: [/*UserRole.ADMIN,*/ UserRole.SuperUser] },
+            { label: "درخواست گزارش نهایی", view: "final-report", roles: [UserRole.ADMIN/*, UserRole.SuperUser*/] },
             { label: "بررسی درخواست های گزارش نهایی", view: "handle-final-report", roles: [UserRole.ADMIN] },
             { label: "تحلیل با هوش مصنوعی", view: "analyze-ai", roles: [UserRole.ADMIN] },
         ],
